@@ -14,7 +14,7 @@
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="The Wixely MCPSharp suite — " Opacity="0.65" VerticalAlignment="Center"/>
         <HyperlinkButton Content="GitHub"
-                         NavigateUri="https://github.com/Wixely"
+                         NavigateUri="https://github.com/Wixely/MCPHub"
                          Padding="0" VerticalAlignment="Center"/>
       </StackPanel>
     </StackPanel>
