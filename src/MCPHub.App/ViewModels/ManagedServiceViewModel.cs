@@ -19,6 +19,12 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isBusy;
 
+    [ObservableProperty]
+    private bool _isInstalling;
+
+    [ObservableProperty]
+    private double _installProgress;
+
     public ManagedServiceViewModel(ManagedService model, IServiceManager manager, IServiceProcessHost processHost)
     {
         _model = model;
@@ -49,6 +55,10 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     public bool CanStart => _model.IsInstalled && _model.RunState is ServiceRunState.Stopped or ServiceRunState.Faulted;
 
     public bool CanStop => _model.RunState is ServiceRunState.Starting or ServiceRunState.Running or ServiceRunState.Unhealthy;
+
+    public string InstallButtonText => !_model.IsInstalled
+        ? "Install"
+        : _model.UpdateStatus == UpdateStatus.UpdateAvailable ? "Update" : "Reinstall";
 
     /// <summary>Checks GitHub for this service's latest release and refreshes the row.</summary>
     [RelayCommand]
@@ -91,6 +101,31 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         SyncFromModel();
     }
 
+    /// <summary>Downloads and installs (or updates/reinstalls) this service, preserving config.</summary>
+    [RelayCommand]
+    private async Task InstallAsync()
+    {
+        if (IsInstalling)
+            return;
+
+        IsInstalling = true;
+        InstallProgress = 0;
+        var progress = new Progress<double>(p => InstallProgress = p);
+        try
+        {
+            await _manager.InstallOrUpdateAsync(_model, progress);
+        }
+        catch
+        {
+            // The failure reason is appended to this service's log by the install pipeline.
+        }
+        finally
+        {
+            IsInstalling = false;
+            SyncFromModel();
+        }
+    }
+
     /// <summary>Switches to the Logs page focused on this service.</summary>
     [RelayCommand]
     private void ViewLogs() => WeakReferenceMessenger.Default.Send(new ShowLogsMessage(Name));
@@ -107,5 +142,6 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         OnPropertyChanged(nameof(UpdateStatusText));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(InstallButtonText));
     }
 }
