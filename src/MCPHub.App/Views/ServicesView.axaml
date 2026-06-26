@@ -83,8 +83,7 @@
                     <Button Content="Logs" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding ViewLogsCommand}"/>
                   </StackPanel>
                   <ProgressBar IsVisible="{Binding IsInstalling}" Minimum="0" Maximum="1"
-                               Value="{Binding InstallProgress}" Height="6" VerticalAlignment="Center"
-                               ShowProgressText="True"/>
+                               Value="{Binding InstallProgress}" Height="8" VerticalAlignment="Center"/>
                 </Panel>
 
               </Grid>
