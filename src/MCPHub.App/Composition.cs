@@ -1,11 +1,14 @@
 using System;
 using System.Net.Http.Headers;
+using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
+using MCPHub.AppHost;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
+using MCPHub.Proxy;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MCPHub.App;
@@ -32,6 +35,12 @@ public static class Composition
         services.AddSingleton<ILogStore>(_ => new LogStore(capacity: 5000));
         services.AddSingleton<IServiceProcessHost, ServiceProcessHost>();
 
+        // MCP proxy / aggregator
+        services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
+        services.AddSingleton<ProxyHandlers>();
+        services.AddSingleton<ProxyHost>();
+        services.AddSingleton<ProxyCoordinator>();
+
         // HTTP clients: GitHub releases, a short-timeout health probe, and long-timeout downloads.
         services.AddHttpClient(ReleaseService.HttpClientName, ConfigureGithubClient);
         services.AddHttpClient(ServiceProcessHost.HealthClientName, client => client.Timeout = TimeSpan.FromSeconds(3));
@@ -45,6 +54,7 @@ public static class Composition
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
         services.AddSingleton<LogsViewModel>();
+        services.AddSingleton<ProxyViewModel>();
     }
 
     private static void ConfigureGithubClient(HttpClient client)

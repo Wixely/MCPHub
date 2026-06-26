@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
+using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
 using MCPHub.App.Views;
 using MCPHub.Core.Process;
@@ -34,9 +35,14 @@ public partial class App : Application
                 DataContext = Services.GetRequiredService<MainWindowViewModel>(),
             };
 
-            // Kill any running sub-server processes when MCPHub exits.
+            // Start the aggregated MCP proxy endpoint and begin tracking running services.
+            _ = Services.GetRequiredService<ProxyCoordinator>().StartAsync();
+
+            // Stop the proxy and kill any running sub-server processes when MCPHub exits.
             desktop.ShutdownRequested += (_, _) =>
             {
+                try { Services.GetService<ProxyCoordinator>()?.StopAsync().Wait(TimeSpan.FromSeconds(3)); }
+                catch { /* best effort */ }
                 try { Services.GetService<IServiceProcessHost>()?.StopAllAsync().Wait(TimeSpan.FromSeconds(3)); }
                 catch { /* best effort */ }
             };

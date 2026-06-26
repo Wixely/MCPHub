@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="560"
+             x:Class="MCPHub.App.Views.ProxyView"
+             x:DataType="vm:ProxyViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="16">
+
+      <StackPanel Spacing="2">
+        <TextBlock Text="MCP Proxy / Aggregator" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="One MCP endpoint that routes to every running sub-server. Point your client here."
+                   Opacity="0.65"/>
+      </StackPanel>
+
+      <!-- Endpoint card -->
+      <Border Background="#14000000" CornerRadius="8" Padding="16">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+          <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                    Background="{Binding IsRunning, Converter={StaticResource RunningToBrush}}"/>
+            <TextBlock Text="{Binding EndpointUrl}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="14" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="Copy URL" Click="OnCopyUrl"/>
+            <Button Content="{Binding ToggleButtonText}" Command="{Binding ToggleCommand}"/>
+          </StackPanel>
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0">
+            <Run Text="Aggregated tools: "/>
+            <Run Text="{Binding ToolCount}" FontWeight="SemiBold"/>
+          </TextBlock>
+        </Grid>
+      </Border>
+
+      <!-- Client config snippet -->
+      <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Text="Client configuration" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Copy snippet" Click="OnCopySnippet"/>
+        </Grid>
+        <Border Background="#0D1117" CornerRadius="6" Padding="12">
+          <TextBlock Text="{Binding ClientSnippet}" FontFamily="Cascadia Mono,Consolas,monospace"
+                     FontSize="12" Foreground="#9DA5B4"/>
+        </Border>
+      </StackPanel>
+
+      <!-- Upstreams -->
+      <StackPanel Spacing="6">
+        <TextBlock Text="Connected servers" FontWeight="SemiBold"/>
+        <Border Background="#14000000" CornerRadius="6,6,0,0" Padding="14,8">
+          <Grid ColumnDefinitions="*,120,80">
+            <TextBlock Grid.Column="0" Text="Server" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="1" Text="State" FontWeight="SemiBold"/>
+            <TextBlock Grid.Column="2" Text="Tools" FontWeight="SemiBold"/>
+          </Grid>
+        </Border>
+        <ItemsControl ItemsSource="{Binding Upstreams}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:UpstreamRowViewModel">
+              <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,9">
+                <Grid ColumnDefinitions="*,120,80">
+                  <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Endpoint}" Opacity="0.55" FontSize="11"/>
+                    <TextBlock Text="{Binding LastError}" Foreground="#F0846B" FontSize="11"
+                               IsVisible="{Binding HasError}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                    <Border Width="9" Height="9" CornerRadius="5" VerticalAlignment="Center"
+                            Background="{Binding State, Converter={StaticResource UpstreamStateToBrush}}"/>
+                    <TextBlock Text="{Binding StateText}" FontSize="12"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="{Binding ToolCount}" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="No servers connected yet — start a service on the Services tab."
+                   Opacity="0.55" FontSize="12" Margin="2,4,0,0"
+                   IsVisible="{Binding !HasUpstreams}"/>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

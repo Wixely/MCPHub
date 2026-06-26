@@ -34,6 +34,14 @@ public sealed record ServiceCatalogEntry(
     /// <summary>Config file name read next to the executable, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
     public string ConfigFileName => $"{Name}.json";
 
+    /// <summary>
+    /// Short lowercase slug used to namespace this server's tools in the proxy (product name minus the
+    /// trailing "MCPSharp"), e.g. <c>noteworthy</c> for <c>NoteworthyMCPSharp</c>.
+    /// </summary>
+    public string Key => Name.EndsWith("MCPSharp", StringComparison.OrdinalIgnoreCase)
+        ? Name[..^"MCPSharp".Length].ToLowerInvariant()
+        : Name.ToLowerInvariant();
+
     /// <summary>Executable file name for the given OS (<c>{Name}.exe</c> on Windows, <c>{Name}</c> elsewhere).</summary>
     public string ExecutableFileName(bool isWindows) => isWindows ? $"{Name}.exe" : Name;
 

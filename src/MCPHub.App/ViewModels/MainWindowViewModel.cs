@@ -18,7 +18,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavItem> NavItems { get; }
 
-    public MainWindowViewModel(ServicesViewModel services, LogsViewModel logs)
+    public MainWindowViewModel(ServicesViewModel services, LogsViewModel logs, ProxyViewModel proxy)
     {
         _logs = logs;
         _logsNav = new NavItem("Logs", logs);
@@ -27,9 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase
         [
             new NavItem("Services", services),
             _logsNav,
-            new NavItem("Proxy", new PlaceholderViewModel(
-                "Proxy / Aggregator",
-                "The single aggregated MCP endpoint (http://localhost:5800/mcp) arrives in milestone M4.")),
+            new NavItem("Proxy", proxy),
             new NavItem("Settings", new PlaceholderViewModel(
                 "Settings",
                 "Shared servers folder, download flavour, proxy port, tray behaviour and more arrive in milestone M5.")),
