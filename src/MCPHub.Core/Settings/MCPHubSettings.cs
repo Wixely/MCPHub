@@ -64,5 +64,10 @@ public sealed class MCPHubSettings
     /// <summary>UI theme: <c>Default</c>, <c>Light</c>, or <c>Dark</c>.</summary>
     public string Theme { get; set; } = "Default";
 
+    /// <summary>Remembered main-window size (position is intentionally not persisted).</summary>
+    public double WindowWidth { get; set; } = 1240;
+
+    public double WindowHeight { get; set; } = 680;
+
     public List<UserMcpServerDefinition> UserServers { get; set; } = [];
 }
