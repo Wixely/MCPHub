@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="560"
+             x:Class="MCPHub.App.Views.PlaceholderView"
+             x:DataType="vm:PlaceholderViewModel">
+
+  <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440" Spacing="10">
+    <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+    <TextBlock Text="{Binding Message}" Opacity="0.65" TextWrapping="Wrap" TextAlignment="Center"/>
+  </StackPanel>
+
+</UserControl>

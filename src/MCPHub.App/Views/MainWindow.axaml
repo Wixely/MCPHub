@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MCPHub.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="MCPHub.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="980" Height="640"
+        MinWidth="760" MinHeight="480"
+        Title="MCPHub">
+
+  <Grid ColumnDefinitions="220,*">
+
+    <!-- Left navigation rail -->
+    <Border Grid.Column="0" Background="#14000000">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="16,18,16,14" Spacing="2">
+          <TextBlock Text="MCPHub" FontSize="22" FontWeight="SemiBold"/>
+          <TextBlock Text="MCP server hub &amp; proxy" FontSize="12" Opacity="0.6"/>
+        </StackPanel>
+
+        <ListBox ItemsSource="{Binding NavItems}"
+                 SelectedItem="{Binding SelectedNav}"
+                 Background="Transparent"
+                 Margin="6,4">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavItem">
+              <TextBlock Text="{Binding Title}" FontSize="14" Padding="8,6"/>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Active page -->
+    <ContentControl Grid.Column="1" Content="{Binding CurrentPage}"/>
+
+  </Grid>
+</Window>

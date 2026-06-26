@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Builds the solution, then launches the Avalonia desktop app under the debugger.
+      "name": "Run/Debug MCPHub (App)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/MCPHub.App/bin/Debug/net10.0/MCPHub.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/MCPHub.App",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "requireExactSource": false
+    },
+    {
+      // Attach to an already-running MCPHub.exe (e.g. one started via `dotnet run`).
+      "name": "Attach to MCPHub",
+      "type": "coreclr",
+      "request": "attach"
+    }
+  ]
+}

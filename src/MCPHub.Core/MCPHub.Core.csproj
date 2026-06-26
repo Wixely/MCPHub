@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MCPHub.Core</RootNamespace>
+    <AssemblyName>MCPHub.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>

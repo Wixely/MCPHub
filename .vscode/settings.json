@@ -1,0 +1,20 @@
+{
+  // Point the C# Dev Kit / language server at our solution explicitly.
+  "dotnet.defaultSolution": "MCPHub.slnx",
+
+  // Keep the editor quiet and consistent with the codebase style.
+  "editor.formatOnSave": true,
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp"
+  },
+
+  // Reduce file-watcher churn from build output.
+  "files.watcherExclude": {
+    "**/bin/**": true,
+    "**/obj/**": true
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}

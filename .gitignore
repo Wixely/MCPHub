@@ -1,0 +1,49 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+publish/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+
+# VS Code: ignore personal files but keep shared run/debug configs tracked
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/extensions.json
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Rider
+_ReSharper*/
+
+# .NET
+project.lock.json
+project.fragment.lock.json
+*.nupkg
+*.snupkg
+.dotnet/
+msbuild.binlog
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coverInfo
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MCPHub local runtime data (never commit downloaded servers or user settings)
+servers/
+downloads/
+*.bak-*

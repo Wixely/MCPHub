@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MCPHub.AppHost</RootNamespace>
+    <AssemblyName>MCPHub.AppHost</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Library that hosts an in-process Kestrel/ASP.NET Core MCP endpoint. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MCPHub.Core\MCPHub.Core.csproj" />
+    <ProjectReference Include="..\MCPHub.Proxy\MCPHub.Proxy.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+</Project>

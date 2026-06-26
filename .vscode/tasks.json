@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "detail": "dotnet build the whole solution",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/MCPHub.slnx",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "test",
+      "detail": "dotnet test the solution",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "test",
+        "${workspaceFolder}/MCPHub.slnx",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "clean",
+      "detail": "dotnet clean the solution",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["clean", "${workspaceFolder}/MCPHub.slnx"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "watch (hot reload)",
+      "detail": "dotnet watch run the App with XAML/C# hot reload",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "watch",
+        "run",
+        "--project",
+        "${workspaceFolder}/src/MCPHub.App/MCPHub.App.csproj"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^\\s*(.*)$",
+          "file": 1,
+          "location": 1,
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "(?i).*(building|hot reload|file changed).*",
+          "endsPattern": "(?i).*(application started|hot reload of changes succeeded|press ctrl).*"
+        }
+      }
+    }
+  ]
+}
