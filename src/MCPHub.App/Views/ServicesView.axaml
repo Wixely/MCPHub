@@ -31,7 +31,7 @@
 
     <!-- Column header -->
     <Border DockPanel.Dock="Top" Background="#14000000" CornerRadius="6,6,0,0" Padding="14,9">
-      <Grid ColumnDefinitions="*,52,80,104,116,300">
+      <Grid ColumnDefinitions="*,52,80,104,116,344">
         <TextBlock Grid.Column="0" Text="Service" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="1" Text="Port" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="2" Text="Installed" FontWeight="SemiBold"/>
@@ -46,7 +46,7 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ManagedServiceViewModel">
             <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,8">
-              <Grid ColumnDefinitions="*,52,80,104,116,300" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="*,52,80,104,116,344" VerticalAlignment="Center">
 
                 <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0">
                   <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
@@ -75,12 +75,12 @@
                 <Panel Grid.Column="5">
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                               IsVisible="{Binding !IsInstalling}">
-                    <Button Content="{Binding InstallButtonText}" Padding="8,4" Command="{Binding InstallCommand}"/>
-                    <Button Content="Start" Padding="8,4" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
-                    <Button Content="Stop" Padding="8,4" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
-                    <Button Content="Config" Padding="8,4" Command="{Binding EditConfigCommand}"
+                    <Button Content="{Binding InstallButtonText}" Width="84" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding InstallCommand}"/>
+                    <Button Content="Start" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
+                    <Button Content="Stop" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
+                    <Button Content="Config" Width="64" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding EditConfigCommand}"
                             IsEnabled="{Binding CanEditConfig}" ToolTip.Tip="{Binding ConfigFileName}"/>
-                    <Button Content="Logs" Padding="8,4" Command="{Binding ViewLogsCommand}"/>
+                    <Button Content="Logs" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding ViewLogsCommand}"/>
                   </StackPanel>
                   <ProgressBar IsVisible="{Binding IsInstalling}" Minimum="0" Maximum="1"
                                Value="{Binding InstallProgress}" Height="6" VerticalAlignment="Center"
