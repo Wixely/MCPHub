@@ -44,6 +44,7 @@ public sealed class ServiceProcessHost : IServiceProcessHost
     private readonly Dictionary<string, RunningProcess> _running = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
+    private readonly WindowsJobObject? _jobObject;
     private Task? _healthLoop;
 
     public ServiceProcessHost(ILogStore logStore, IHttpClientFactory httpClientFactory, ILogger<ServiceProcessHost> logger)
@@ -51,6 +52,10 @@ public sealed class ServiceProcessHost : IServiceProcessHost
         _logStore = logStore;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+
+        // Children assigned to this job die with MCPHub even on a crash/force-kill.
+        if (OperatingSystem.IsWindows())
+            _jobObject = new WindowsJobObject();
     }
 
     public event Action<ManagedService>? StateChanged;
@@ -103,6 +108,8 @@ public sealed class ServiceProcessHost : IServiceProcessHost
             SetState(service, ServiceRunState.Starting);
             service.StartedAt = DateTimeOffset.Now;
             process.Start();
+            if (OperatingSystem.IsWindows())
+                _jobObject?.AssignProcess(process);
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             service.ProcessId = process.Id;
@@ -284,6 +291,8 @@ public sealed class ServiceProcessHost : IServiceProcessHost
         {
             try { await _healthLoop; } catch { /* ignore */ }
         }
+        if (OperatingSystem.IsWindows())
+            _jobObject?.Dispose();
         _shutdown.Dispose();
     }
 

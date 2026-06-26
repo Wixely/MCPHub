@@ -31,4 +31,13 @@ public sealed class UpstreamServer
 
     /// <summary>The live client once connected (owned by the registry).</summary>
     internal McpClient? Client { get; set; }
+
+    /// <summary>Factory used to (re)create the transport when reconnecting.</summary>
+    internal Func<IClientTransport>? TransportFactory { get; set; }
+
+    /// <summary>Earliest time a faulted upstream may be retried.</summary>
+    internal DateTimeOffset NextRetryAt { get; set; }
+
+    /// <summary>Current backoff delay (doubles on each failure, capped).</summary>
+    internal TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(10);
 }

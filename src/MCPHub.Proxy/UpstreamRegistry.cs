@@ -31,7 +31,10 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<UpstreamRegistry> _logger;
     private readonly ConcurrentDictionary<string, UpstreamServer> _upstreams = new(StringComparer.OrdinalIgnoreCase);
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly object _gate = new();
     private volatile AggregatedCatalog _catalog = AggregatedCatalog.Empty;
+    private Task? _reconnectLoop;
 
     public UpstreamRegistry(ILoggerFactory loggerFactory)
     {
@@ -59,29 +62,74 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
                 _loggerFactory),
             cancellationToken);
 
-    private async Task ConnectCoreAsync(string key, string displayName, string endpointLabel, Func<IClientTransport> transportFactory, CancellationToken cancellationToken)
+    private Task ConnectCoreAsync(string key, string displayName, string endpointLabel, Func<IClientTransport> transportFactory, CancellationToken cancellationToken)
     {
         var upstream = _upstreams.GetOrAdd(key, _ => new UpstreamServer { Key = key, DisplayName = displayName, Endpoint = endpointLabel });
         upstream.Endpoint = endpointLabel;
+        upstream.TransportFactory = transportFactory;
+        return AttemptAsync(upstream, cancellationToken);
+    }
+
+    private async Task AttemptAsync(UpstreamServer upstream, CancellationToken cancellationToken)
+    {
         upstream.State = UpstreamState.Connecting;
         upstream.LastError = null;
 
         try
         {
-            var client = await McpClient.CreateAsync(transportFactory(), clientOptions: null, _loggerFactory, cancellationToken);
+            var client = await McpClient.CreateAsync(upstream.TransportFactory!(), clientOptions: null, _loggerFactory, cancellationToken);
 
             await DisposeClientAsync(upstream); // replace any prior client
             upstream.Client = client;
             upstream.State = UpstreamState.Connected;
-            _logger.LogInformation("Connected upstream {Key} ({Endpoint}).", key, endpointLabel);
+            upstream.RetryDelay = TimeSpan.FromSeconds(10); // reset backoff on success
+            _logger.LogInformation("Connected upstream {Key} ({Endpoint}).", upstream.Key, upstream.Endpoint);
             await RebuildAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             upstream.State = UpstreamState.Faulted;
             upstream.LastError = ex.Message;
-            _logger.LogWarning(ex, "Failed to connect upstream {Key} ({Endpoint}).", key, endpointLabel);
+            upstream.RetryDelay = TimeSpan.FromSeconds(Math.Min(60, Math.Max(10, upstream.RetryDelay.TotalSeconds * 2)));
+            upstream.NextRetryAt = DateTimeOffset.Now + upstream.RetryDelay;
+            _logger.LogWarning(ex, "Upstream {Key} ({Endpoint}) failed; retrying in {Delay}s.",
+                upstream.Key, upstream.Endpoint, upstream.RetryDelay.TotalSeconds);
             await RebuildAsync(cancellationToken);
+        }
+
+        EnsureReconnectLoop();
+    }
+
+    private void EnsureReconnectLoop()
+    {
+        lock (_gate)
+            _reconnectLoop ??= Task.Run(ReconnectLoopAsync);
+    }
+
+    private async Task ReconnectLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_shutdown.Token))
+            {
+                List<UpstreamServer> due;
+                lock (_gate)
+                    due = _upstreams.Values
+                        .Where(u => u.State == UpstreamState.Faulted && u.TransportFactory is not null && DateTimeOffset.Now >= u.NextRetryAt)
+                        .ToList();
+
+                foreach (var upstream in due)
+                {
+                    if (_shutdown.IsCancellationRequested)
+                        break;
+                    await AttemptAsync(upstream, _shutdown.Token);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shutting down
         }
     }
 
@@ -96,6 +144,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
 
     public async Task DisconnectAllAsync()
     {
+        await _shutdown.CancelAsync();
         foreach (var upstream in _upstreams.Values)
             await DisposeClientAsync(upstream);
         _upstreams.Clear();
