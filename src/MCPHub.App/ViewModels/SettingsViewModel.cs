@@ -35,8 +35,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public string[] Themes { get; } = ["Default", "Light", "Dark"];
 
-    public string DefaultServersFolderHint => $"Leave blank to use the default ({_paths.DefaultServersDirectory}).";
-
     public SettingsViewModel(ISettingsStore settingsStore, ISecretStore secretStore, IServiceManager manager, IAppPaths paths)
     {
         _settingsStore = settingsStore;
@@ -66,12 +64,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private async Task SaveAsync()
     {
         var s = _settingsStore.Current;
-        // Store null when it's blank or just the default, so "use default" stays dynamic.
-        var folder = SharedServersFolder?.Trim();
-        s.SharedServersFolder = string.IsNullOrWhiteSpace(folder)
-            || string.Equals(folder, _paths.DefaultServersDirectory, StringComparison.OrdinalIgnoreCase)
-            ? null
-            : folder;
+        s.SharedServersFolder = SharedServersFolder?.Trim();
         s.Flavor = UseSelfContained ? PublishFlavor.SelfContained : PublishFlavor.FrameworkDependent;
         if (int.TryParse(ProxyPortText, out var port) && port is > 0 and < 65536)
             s.ProxyPort = port;
