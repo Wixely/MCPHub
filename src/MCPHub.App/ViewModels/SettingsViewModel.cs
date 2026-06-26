@@ -45,7 +45,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _paths = paths;
 
         var s = settingsStore.Current;
-        _sharedServersFolder = s.SharedServersFolder ?? string.Empty;
+        // Show the effective folder (the configured one, or the default) — never blank.
+        _sharedServersFolder = string.IsNullOrWhiteSpace(s.SharedServersFolder)
+            ? paths.DefaultServersDirectory
+            : s.SharedServersFolder;
         _useSelfContained = s.Flavor == PublishFlavor.SelfContained;
         _proxyPortText = s.ProxyPort.ToString();
         _proxyBindAddress = s.ProxyBindAddress;
@@ -63,7 +66,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private async Task SaveAsync()
     {
         var s = _settingsStore.Current;
-        s.SharedServersFolder = string.IsNullOrWhiteSpace(SharedServersFolder) ? null : SharedServersFolder.Trim();
+        // Store null when it's blank or just the default, so "use default" stays dynamic.
+        var folder = SharedServersFolder?.Trim();
+        s.SharedServersFolder = string.IsNullOrWhiteSpace(folder)
+            || string.Equals(folder, _paths.DefaultServersDirectory, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : folder;
         s.Flavor = UseSelfContained ? PublishFlavor.SelfContained : PublishFlavor.FrameworkDependent;
         if (int.TryParse(ProxyPortText, out var port) && port is > 0 and < 65536)
             s.ProxyPort = port;
@@ -99,7 +107,16 @@ public sealed partial class SettingsViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(path);
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            if (OperatingSystem.IsWindows())
+            {
+                var psi = new ProcessStartInfo("explorer.exe");
+                psi.ArgumentList.Add(path);
+                Process.Start(psi);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
         }
         catch (Exception ex)
         {
