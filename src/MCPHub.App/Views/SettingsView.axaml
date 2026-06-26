@@ -14,9 +14,10 @@
 
       <StackPanel Spacing="6">
         <TextBlock Text="Shared servers folder" FontWeight="SemiBold"/>
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto,Auto">
           <TextBox Grid.Column="0" Text="{Binding SharedServersFolder}" Watermark="(default)"/>
           <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Click="OnBrowseFolder"/>
+          <Button Grid.Column="2" Content="Open folder" Margin="8,0,0,0" Command="{Binding OpenServersFolderCommand}"/>
         </Grid>
         <TextBlock Text="{Binding DefaultServersFolderHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
       </StackPanel>

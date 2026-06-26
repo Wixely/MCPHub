@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Styling;
@@ -83,6 +86,25 @@ public sealed partial class SettingsViewModel : ViewModelBase
         }
 
         StatusMessage = "Saved. Servers-folder and proxy-port changes take effect on restart.";
+    }
+
+    /// <summary>Opens the effective shared servers folder in the OS file manager.</summary>
+    [RelayCommand]
+    private void OpenServersFolder()
+    {
+        var path = string.IsNullOrWhiteSpace(SharedServersFolder)
+            ? _paths.DefaultServersDirectory
+            : SharedServersFolder.Trim();
+
+        try
+        {
+            Directory.CreateDirectory(path);
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Couldn't open the folder: " + ex.Message;
+        }
     }
 
     [RelayCommand]
