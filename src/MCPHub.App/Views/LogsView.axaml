@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:log="using:MCPHub.Core.Logging"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="560"
+             x:Class="MCPHub.App.Views.LogsView"
+             x:DataType="vm:LogsViewModel">
+
+  <DockPanel Margin="24">
+
+    <TextBlock DockPanel.Dock="Top" Text="Service Output" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+    <!-- Toolbar -->
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="220,*,Auto,Auto,Auto,Auto">
+      <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
+                ItemsSource="{Binding ServiceNames}" SelectedItem="{Binding SelectedService}"/>
+      <TextBox Grid.Column="1" Watermark="Filter…" Text="{Binding FilterText}" Margin="12,0"/>
+      <CheckBox Grid.Column="2" Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
+                VerticalAlignment="Center" Margin="0,0,10,0"/>
+      <Button Grid.Column="3" Content="Clear" Command="{Binding ClearCommand}" Margin="0,0,6,0"/>
+      <Button Grid.Column="4" Content="Copy" Click="OnCopy" Margin="0,0,6,0"/>
+      <Button Grid.Column="5" Content="Save" Click="OnSave"/>
+    </Grid>
+
+    <!-- Log lines -->
+    <Border Background="#0D1117" CornerRadius="6" Padding="4">
+      <ListBox x:Name="LogList" ItemsSource="{Binding Lines}"
+               Background="Transparent" BorderThickness="0"
+               FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="log:LogLine">
+            <Grid ColumnDefinitions="Auto,*">
+              <TextBlock Grid.Column="0" Foreground="#6E7681" Margin="0,0,10,0"
+                         Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss.fff}'}"/>
+              <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap"
+                         Foreground="{Binding Stream, Converter={StaticResource LogStreamToBrush}}"/>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="MinHeight" Value="0"/>
+          </Style>
+        </ListBox.Styles>
+      </ListBox>
+    </Border>
+
+  </DockPanel>
+</UserControl>

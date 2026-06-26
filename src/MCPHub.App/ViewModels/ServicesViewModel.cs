@@ -1,17 +1,21 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Models;
+using MCPHub.Core.Process;
 using MCPHub.Core.Services;
 
 namespace MCPHub.App.ViewModels;
 
-/// <summary>Lists the managed MCP servers and drives the "check for updates" flow.</summary>
+/// <summary>Lists the managed MCP servers and drives the check-for-updates and start/stop flows.</summary>
 public sealed partial class ServicesViewModel : ViewModelBase
 {
     private readonly IServiceManager _manager;
+    private readonly IServiceProcessHost _processHost;
 
     [ObservableProperty]
     private bool _isChecking;
@@ -21,15 +25,28 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
     public ObservableCollection<ManagedServiceViewModel> Services { get; } = [];
 
-    public ServicesViewModel(IServiceManager manager)
+    public ServicesViewModel(IServiceManager manager, IServiceProcessHost processHost)
     {
         _manager = manager;
+        _processHost = processHost;
 
         foreach (var service in manager.Services)
-            Services.Add(new ManagedServiceViewModel(service, manager));
+            Services.Add(new ManagedServiceViewModel(service, manager, processHost));
+
+        _processHost.StateChanged += OnServiceStateChanged;
 
         StatusMessage = $"Servers folder: {manager.ServersFolder}";
         _ = LoadInstalledAsync();
+    }
+
+    private void OnServiceStateChanged(ManagedService service)
+    {
+        // Health/exit callbacks arrive on background threads — marshal to the UI thread.
+        Dispatcher.UIThread.Post(() =>
+        {
+            var vm = Services.FirstOrDefault(v => v.Name == service.Catalog.Name);
+            vm?.SyncFromModel();
+        });
     }
 
     private async Task LoadInstalledAsync()

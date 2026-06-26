@@ -1,6 +1,7 @@
 using MCPHub.Core.Catalog;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Models;
+using MCPHub.Core.Process;
 using MCPHub.Core.Services.Github;
 using Microsoft.Extensions.Logging;
 
@@ -69,7 +70,8 @@ public sealed class ServiceManager : IServiceManager
             else
                 service.InstalledVersion = null;
 
-            service.Port ??= service.Catalog.DefaultPort;
+            // Follow the installed server's own config for the effective port; fall back to the default.
+            service.Port = ServerConfigReader.ReadPort(service.ConfigPath) ?? service.Catalog.DefaultPort;
             service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
         }
     }

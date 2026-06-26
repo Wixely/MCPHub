@@ -1,10 +1,15 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 
 namespace MCPHub.App.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
+    private readonly NavItem _logsNav;
+    private readonly LogsViewModel _logs;
+
     [ObservableProperty]
     private NavItem _selectedNav;
 
@@ -13,11 +18,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavItem> NavItems { get; }
 
-    public MainWindowViewModel(ServicesViewModel services)
+    public MainWindowViewModel(ServicesViewModel services, LogsViewModel logs)
     {
+        _logs = logs;
+        _logsNav = new NavItem("Logs", logs);
+
         NavItems =
         [
             new NavItem("Services", services),
+            _logsNav,
             new NavItem("Proxy", new PlaceholderViewModel(
                 "Proxy / Aggregator",
                 "The single aggregated MCP endpoint (http://localhost:5800/mcp) arrives in milestone M4.")),
@@ -28,6 +37,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
         _selectedNav = NavItems[0];
         _currentPage = _selectedNav.Page;
+
+        // A service row's "Logs" action switches here and focuses that service.
+        WeakReferenceMessenger.Default.Register<ShowLogsMessage>(this, (_, message) =>
+        {
+            _logs.SelectService(message.ServiceName);
+            SelectedNav = _logsNav;
+        });
     }
 
     partial void OnSelectedNavChanged(NavItem value)

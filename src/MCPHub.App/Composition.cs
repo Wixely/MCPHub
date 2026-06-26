@@ -2,6 +2,8 @@ using System;
 using System.Net.Http.Headers;
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Infrastructure;
+using MCPHub.Core.Logging;
+using MCPHub.Core.Process;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,12 +26,18 @@ public static class Composition
         services.AddSingleton<IReleaseService, ReleaseService>();
         services.AddSingleton<IServiceManager, ServiceManager>();
 
-        // GitHub HTTP client (User-Agent is required by the API; optional PAT lifts the rate limit).
+        // Process supervision + log capture
+        services.AddSingleton<ILogStore>(_ => new LogStore(capacity: 5000));
+        services.AddSingleton<IServiceProcessHost, ServiceProcessHost>();
+
+        // HTTP clients: GitHub releases, and a short-timeout health probe.
         services.AddHttpClient(ReleaseService.HttpClientName, ConfigureGithubClient);
+        services.AddHttpClient(ServiceProcessHost.HealthClientName, client => client.Timeout = TimeSpan.FromSeconds(3));
 
         // View-models
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
+        services.AddSingleton<LogsViewModel>();
     }
 
     private static void ConfigureGithubClient(HttpClient client)

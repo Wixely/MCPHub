@@ -6,6 +6,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using MCPHub.App.ViewModels;
 using MCPHub.App.Views;
+using MCPHub.Core.Process;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MCPHub.App;
@@ -31,6 +32,13 @@ public partial class App : Application
             desktop.MainWindow = new MainWindow
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>(),
+            };
+
+            // Kill any running sub-server processes when MCPHub exits.
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                try { Services.GetService<IServiceProcessHost>()?.StopAllAsync().Wait(TimeSpan.FromSeconds(3)); }
+                catch { /* best effort */ }
             };
         }
 

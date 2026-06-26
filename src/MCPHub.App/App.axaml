@@ -7,6 +7,8 @@
 
   <Application.Resources>
     <conv:UpdateStatusToBrushConverter x:Key="UpdateStatusToBrush" />
+    <conv:RunStateToBrushConverter x:Key="RunStateToBrush" />
+    <conv:LogStreamToBrushConverter x:Key="LogStreamToBrush" />
   </Application.Resources>
 
   <Application.DataTemplates>

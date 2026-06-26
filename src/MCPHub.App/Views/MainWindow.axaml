@@ -6,8 +6,8 @@
         mc:Ignorable="d"
         x:Class="MCPHub.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Width="980" Height="640"
-        MinWidth="760" MinHeight="480"
+        Width="1120" Height="680"
+        MinWidth="940" MinHeight="500"
         Title="MCPHub">
 
   <Grid ColumnDefinitions="220,*">
