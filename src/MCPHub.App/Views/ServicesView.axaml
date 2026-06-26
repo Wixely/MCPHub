@@ -13,7 +13,7 @@
       <TextBlock Text="Managed MCP Servers" FontSize="20" FontWeight="SemiBold"/>
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="The Wixely MCPSharp suite — " Opacity="0.65" VerticalAlignment="Center"/>
-        <HyperlinkButton Content="download, run and update from one place."
+        <HyperlinkButton Content="GitHub"
                          NavigateUri="https://github.com/Wixely"
                          Padding="0" VerticalAlignment="Center"/>
       </StackPanel>
