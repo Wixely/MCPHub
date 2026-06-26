@@ -9,20 +9,34 @@
 
   <DockPanel Margin="24">
 
-    <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,16">
+    <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
       <TextBlock Text="Managed MCP Servers" FontSize="20" FontWeight="SemiBold"/>
       <TextBlock Text="The Wixely MCPSharp suite — download, run and update from one place."
                  Opacity="0.65"/>
     </StackPanel>
 
+    <!-- Toolbar -->
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,12" ColumnDefinitions="Auto,Auto,*">
+      <Button Grid.Column="0"
+              Content="Check for updates"
+              Command="{Binding CheckAllUpdatesCommand}"
+              IsEnabled="{Binding !IsChecking}"/>
+      <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="120" Height="4"
+                   Margin="14,0" VerticalAlignment="Center"
+                   IsVisible="{Binding IsChecking}"/>
+      <TextBlock Grid.Column="2" Text="{Binding StatusMessage}"
+                 VerticalAlignment="Center" Opacity="0.7"
+                 TextTrimming="CharacterEllipsis"/>
+    </Grid>
+
     <!-- Column header -->
     <Border DockPanel.Dock="Top" Background="#14000000" CornerRadius="6,6,0,0" Padding="14,9">
-      <Grid ColumnDefinitions="*,80,110,110,120">
+      <Grid ColumnDefinitions="*,70,110,110,150">
         <TextBlock Grid.Column="0" Text="Service" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="1" Text="Port" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="2" Text="Installed" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="3" Text="Latest" FontWeight="SemiBold"/>
-        <TextBlock Grid.Column="4" Text="Status" FontWeight="SemiBold"/>
+        <TextBlock Grid.Column="4" Text="Update" FontWeight="SemiBold"/>
       </Grid>
     </Border>
 
@@ -31,7 +45,7 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ManagedServiceViewModel">
             <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,10">
-              <Grid ColumnDefinitions="*,80,110,110,120" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="*,70,110,110,150" VerticalAlignment="Center">
                 <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0">
                   <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
                   <TextBlock Text="{Binding Description}" Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
@@ -39,10 +53,11 @@
                 <TextBlock Grid.Column="1" Text="{Binding PortText}" VerticalAlignment="Center" Opacity="0.85"/>
                 <TextBlock Grid.Column="2" Text="{Binding InstalledVersion}" VerticalAlignment="Center" Opacity="0.85"/>
                 <TextBlock Grid.Column="3" Text="{Binding LatestVersion}" VerticalAlignment="Center" Opacity="0.85"/>
-                <Border Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Left"
-                        Background="#1F000000" CornerRadius="10" Padding="10,3">
-                  <TextBlock Text="{Binding RunState}" FontSize="12"/>
-                </Border>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Border Width="9" Height="9" CornerRadius="5" VerticalAlignment="Center"
+                          Background="{Binding UpdateStatus, Converter={StaticResource UpdateStatusToBrush}}"/>
+                  <TextBlock Text="{Binding UpdateStatusText}" FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
               </Grid>
             </Border>
           </DataTemplate>

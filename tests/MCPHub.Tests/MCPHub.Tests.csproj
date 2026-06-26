@@ -5,6 +5,8 @@
     <RootNamespace>MCPHub.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- xUnit1051: prefers threading TestContext.Current.CancellationToken; immaterial for these unit tests. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

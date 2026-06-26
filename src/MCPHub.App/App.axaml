@@ -1,8 +1,13 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MCPHub.App"
+             xmlns:conv="using:MCPHub.App.Converters"
              x:Class="MCPHub.App.App"
              RequestedThemeVariant="Default">
+
+  <Application.Resources>
+    <conv:UpdateStatusToBrushConverter x:Key="UpdateStatusToBrush" />
+  </Application.Resources>
 
   <Application.DataTemplates>
     <local:ViewLocator />

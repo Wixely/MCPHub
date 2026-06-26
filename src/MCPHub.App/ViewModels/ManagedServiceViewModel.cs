@@ -1,24 +1,72 @@
+using System;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using MCPHub.Core.Catalog;
+using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Models;
+using MCPHub.Core.Services;
 
 namespace MCPHub.App.ViewModels;
 
-/// <summary>Observable wrapper around one catalog product for display in the services list.</summary>
+/// <summary>Observable wrapper around one <see cref="ManagedService"/> for the services list.</summary>
 public sealed partial class ManagedServiceViewModel : ViewModelBase
 {
-    private readonly ServiceCatalogEntry _entry;
+    private readonly ManagedService _model;
+    private readonly IServiceManager _manager;
 
-    public ManagedServiceViewModel(ServiceCatalogEntry entry) => _entry = entry;
+    [ObservableProperty]
+    private bool _isBusy;
 
-    public string Name => _entry.Name;
-    public string DisplayName => _entry.DisplayName;
-    public string Description => _entry.Description;
-    public string PortText => _entry.DefaultPort?.ToString() ?? "auto";
-    public string RepositoryUrl => _entry.RepositoryUrl;
+    public ManagedServiceViewModel(ManagedService model, IServiceManager manager)
+    {
+        _model = model;
+        _manager = manager;
+    }
 
-    [ObservableProperty] private ServiceRunState _runState = ServiceRunState.Stopped;
-    [ObservableProperty] private UpdateStatus _updateStatus = UpdateStatus.Unknown;
-    [ObservableProperty] private string _installedVersion = "—";
-    [ObservableProperty] private string _latestVersion = "—";
+    public string Name => _model.Catalog.Name;
+    public string DisplayName => _model.Catalog.DisplayName;
+    public string Description => _model.Catalog.Description;
+    public string RepositoryUrl => _model.Catalog.RepositoryUrl;
+    public string PortText => _model.Port?.ToString() ?? "auto";
+    public string InstalledVersion => _model.InstalledVersion ?? "—";
+    public string LatestVersion => _model.LatestVersion ?? "—";
+    public ServiceRunState RunState => _model.RunState;
+    public UpdateStatus UpdateStatus => _model.UpdateStatus;
+
+    public string UpdateStatusText => _model.UpdateStatus switch
+    {
+        UpdateStatus.NotInstalled => "Not installed",
+        UpdateStatus.UpToDate => "Up to date",
+        UpdateStatus.UpdateAvailable => "Update available",
+        _ => "—",
+    };
+
+    /// <summary>Checks GitHub for this service's latest release and refreshes the row.</summary>
+    [RelayCommand]
+    public async Task CheckUpdateAsync()
+    {
+        if (IsBusy)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            await _manager.CheckForUpdatesAsync(_model);
+        }
+        finally
+        {
+            IsBusy = false;
+            SyncFromModel();
+        }
+    }
+
+    /// <summary>Raises change notifications for every property backed by the underlying model.</summary>
+    public void SyncFromModel()
+    {
+        OnPropertyChanged(nameof(InstalledVersion));
+        OnPropertyChanged(nameof(LatestVersion));
+        OnPropertyChanged(nameof(PortText));
+        OnPropertyChanged(nameof(RunState));
+        OnPropertyChanged(nameof(UpdateStatus));
+        OnPropertyChanged(nameof(UpdateStatusText));
+    }
 }
