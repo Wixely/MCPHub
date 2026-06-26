@@ -1,0 +1,12 @@
+# Normalize text line endings in the repository (LF), check out per-platform.
+* text=auto
+
+# Must stay LF so the Linux CI runner / shells parse them correctly.
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Binary assets — never normalize.
+*.png binary
+*.ico binary
+*.zip binary
