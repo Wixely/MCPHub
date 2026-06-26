@@ -8,6 +8,7 @@
         x:DataType="vm:MainWindowViewModel"
         Width="1180" Height="680"
         MinWidth="980" MinHeight="500"
+        Icon="/Assets/mcphub.ico"
         Title="MCPHub">
 
   <Grid ColumnDefinitions="220,*">

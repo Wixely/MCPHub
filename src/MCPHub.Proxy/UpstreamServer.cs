@@ -20,8 +20,8 @@ public sealed class UpstreamServer
     /// <summary>Human-friendly name for the proxy status UI.</summary>
     public required string DisplayName { get; init; }
 
-    /// <summary>The upstream MCP HTTP endpoint, e.g. <c>http://localhost:5711/mcp</c>.</summary>
-    public required Uri Endpoint { get; set; }
+    /// <summary>Display label for the upstream endpoint, e.g. <c>http://localhost:5711/mcp</c> or <c>stdio: …</c>.</summary>
+    public required string Endpoint { get; set; }
 
     public UpstreamState State { get; set; } = UpstreamState.Disconnected;
 

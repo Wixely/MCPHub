@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
@@ -8,6 +9,7 @@ using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
 using MCPHub.App.Views;
 using MCPHub.Core.Process;
+using MCPHub.Core.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MCPHub.App;
@@ -24,6 +26,9 @@ public partial class App : Application
         var collection = new ServiceCollection();
         Composition.ConfigureServices(collection);
         Services = collection.BuildServiceProvider();
+
+        // Apply the persisted theme before showing any window.
+        SettingsViewModel.ApplyTheme(Services.GetRequiredService<ISettingsStore>().Current.Theme);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -49,6 +54,30 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void OnTrayIconClicked(object? sender, EventArgs e) => ShowMainWindow();
+
+    private void OnTrayOpen(object? sender, EventArgs e) => ShowMainWindow();
+
+    private void OnTrayExit(object? sender, EventArgs e)
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            if (desktop.MainWindow is MainWindow window)
+                window.ForceClose = true;
+            desktop.Shutdown();
+        }
+    }
+
+    private void ShowMainWindow()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
+        {
+            window.Show();
+            window.WindowState = WindowState.Normal;
+            window.Activate();
+        }
     }
 
     private static void DisableAvaloniaDataAnnotationValidation()

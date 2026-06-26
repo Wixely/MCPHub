@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
+             x:Class="MCPHub.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="18" MaxWidth="740" HorizontalAlignment="Left">
+
+      <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold"/>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="Shared servers folder" FontWeight="SemiBold"/>
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Grid.Column="0" Text="{Binding SharedServersFolder}" Watermark="(default)"/>
+          <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Click="OnBrowseFolder"/>
+        </Grid>
+        <TextBlock Text="{Binding DefaultServersFolderHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="Downloads" FontWeight="SemiBold"/>
+        <CheckBox IsChecked="{Binding UseSelfContained}"
+                  Content="Download self-contained builds (bundle the .NET runtime — larger, but need no runtime installed)"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="Proxy" FontWeight="SemiBold"/>
+        <Grid ColumnDefinitions="Auto,120,Auto,200">
+          <TextBlock Grid.Column="0" Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <TextBox Grid.Column="1" Text="{Binding ProxyPortText}"/>
+          <TextBlock Grid.Column="2" Text="Bind" VerticalAlignment="Center" Margin="16,0,8,0"/>
+          <TextBox Grid.Column="3" Text="{Binding ProxyBindAddress}"/>
+        </Grid>
+        <CheckBox IsChecked="{Binding StartProxyOnLaunch}" Content="Start the proxy automatically on launch"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="System tray (Windows)" FontWeight="SemiBold"/>
+        <CheckBox IsChecked="{Binding MinimizeToTray}" Content="Minimizing the window hides it to the tray"/>
+        <CheckBox IsChecked="{Binding CloseToTray}" Content="Closing the window hides to the tray instead of exiting"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="Theme" FontWeight="SemiBold"/>
+        <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="200" HorizontalAlignment="Left"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="GitHub token (optional)" FontWeight="SemiBold"/>
+        <TextBlock Text="Lifts the 60 requests/hour limit when checking for updates. Stored encrypted (DPAPI) on Windows."
+                   Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Grid.Column="0" Text="{Binding GithubPatInput}" PasswordChar="•" Watermark="Paste a token to set or replace…"/>
+          <Button Grid.Column="1" Content="Clear" Margin="8,0,0,0" Command="{Binding ClearTokenCommand}"/>
+        </Grid>
+        <TextBlock Text="A token is currently stored." Opacity="0.6" FontSize="12" IsVisible="{Binding HasStoredPat}"/>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+        <Button Content="Save" Command="{Binding SaveCommand}"/>
+        <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"/>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

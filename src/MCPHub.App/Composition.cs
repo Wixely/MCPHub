@@ -8,6 +8,7 @@ using MCPHub.Core.Logging;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
+using MCPHub.Core.Settings;
 using MCPHub.Proxy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,8 +24,13 @@ public static class Composition
     {
         services.AddLogging();
 
-        // Core infrastructure + service manager
+        // Settings + secrets
         services.AddSingleton<IAppPaths, AppPaths>();
+        services.AddSingleton<ISettingsStore, SettingsStore>();
+        services.AddSingleton<ISecretStore, SecretStore>();
+        services.AddTransient<GithubAuthHandler>();
+
+        // Core infrastructure + service manager
         services.AddSingleton<IInstalledManifestStore, InstalledManifestStore>();
         services.AddSingleton<IReleaseService, ReleaseService>();
         services.AddSingleton<IConfigMergeService, ConfigMergeService>();
@@ -42,7 +48,8 @@ public static class Composition
         services.AddSingleton<ProxyCoordinator>();
 
         // HTTP clients: GitHub releases, a short-timeout health probe, and long-timeout downloads.
-        services.AddHttpClient(ReleaseService.HttpClientName, ConfigureGithubClient);
+        services.AddHttpClient(ReleaseService.HttpClientName, ConfigureGithubClient)
+            .AddHttpMessageHandler<GithubAuthHandler>();
         services.AddHttpClient(ServiceProcessHost.HealthClientName, client => client.Timeout = TimeSpan.FromSeconds(3));
         services.AddHttpClient(DownloadService.HttpClientName, client =>
         {
@@ -55,6 +62,7 @@ public static class Composition
         services.AddSingleton<ServicesViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
+        services.AddSingleton<SettingsViewModel>();
     }
 
     private static void ConfigureGithubClient(HttpClient client)
@@ -64,9 +72,6 @@ public static class Composition
         client.DefaultRequestHeaders.UserAgent.ParseAdd("MCPHub/0.1 (+https://github.com/Wixely)");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
-
-        var pat = Environment.GetEnvironmentVariable("MCPHUB_GITHUB_PAT");
-        if (!string.IsNullOrWhiteSpace(pat))
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", pat);
+        // Authorization (PAT) is added per-request by GithubAuthHandler.
     }
 }

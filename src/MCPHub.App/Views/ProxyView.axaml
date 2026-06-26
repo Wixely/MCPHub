@@ -85,6 +85,35 @@
                    IsVisible="{Binding !HasUpstreams}"/>
       </StackPanel>
 
+      <!-- User-added servers -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="User-added servers" FontWeight="SemiBold"/>
+        <TextBlock Text="Aggregate any other MCP server — an HTTP endpoint, or a local stdio command."
+                   Opacity="0.6" FontSize="12"/>
+        <Grid ColumnDefinitions="190,*,Auto,Auto" ColumnSpacing="8">
+          <TextBox Grid.Column="0" Watermark="Name (optional)" Text="{Binding NewServerName}"/>
+          <TextBox Grid.Column="1" Watermark="{Binding NewServerTargetWatermark}" Text="{Binding NewServerTarget}"/>
+          <CheckBox Grid.Column="2" Content="stdio" IsChecked="{Binding NewServerIsStdio}" VerticalAlignment="Center"/>
+          <Button Grid.Column="3" Content="Add" Command="{Binding AddUserServerCommand}"/>
+        </Grid>
+        <ItemsControl ItemsSource="{Binding UserServers}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:UserServerRowViewModel">
+              <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="2,8">
+                <Grid ColumnDefinitions="*,Auto,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Target}" Opacity="0.55" FontSize="11"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="{Binding ToggleText}" Margin="0,0,6,0" Command="{Binding ToggleCommand}"/>
+                  <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

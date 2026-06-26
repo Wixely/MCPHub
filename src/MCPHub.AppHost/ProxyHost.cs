@@ -34,6 +34,15 @@ public sealed class ProxyHost
 
     public string EndpointUrl => $"http://{BindAddress}:{Port}/mcp";
 
+    /// <summary>Sets the bind address/port to use (ignored while running).</summary>
+    public void Configure(string bindAddress, int port)
+    {
+        if (_app is not null)
+            return;
+        BindAddress = bindAddress;
+        Port = port;
+    }
+
     public async Task StartAsync(string bindAddress, int port, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);

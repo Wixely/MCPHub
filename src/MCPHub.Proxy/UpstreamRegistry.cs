@@ -20,6 +20,7 @@ public interface IUpstreamRegistry
     event Action? CatalogChanged;
 
     Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default);
+    Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default);
     Task DisconnectAsync(string key, CancellationToken cancellationToken = default);
     Task DisconnectAllAsync();
 }
@@ -44,32 +45,42 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
 
     public event Action? CatalogChanged;
 
-    public async Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default)
+    public Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default)
+        => ConnectCoreAsync(key, displayName, endpoint.ToString(),
+            () => new HttpClientTransport(
+                new HttpClientTransportOptions { Endpoint = endpoint, TransportMode = HttpTransportMode.AutoDetect },
+                _loggerFactory),
+            cancellationToken);
+
+    public Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
+        => ConnectCoreAsync(key, displayName, $"stdio: {command}",
+            () => new StdioClientTransport(
+                new StdioClientTransportOptions { Command = command, Arguments = arguments?.ToList() ?? [] },
+                _loggerFactory),
+            cancellationToken);
+
+    private async Task ConnectCoreAsync(string key, string displayName, string endpointLabel, Func<IClientTransport> transportFactory, CancellationToken cancellationToken)
     {
-        var upstream = _upstreams.GetOrAdd(key, _ => new UpstreamServer { Key = key, DisplayName = displayName, Endpoint = endpoint });
-        upstream.Endpoint = endpoint;
+        var upstream = _upstreams.GetOrAdd(key, _ => new UpstreamServer { Key = key, DisplayName = displayName, Endpoint = endpointLabel });
+        upstream.Endpoint = endpointLabel;
         upstream.State = UpstreamState.Connecting;
         upstream.LastError = null;
 
         try
         {
-            var transport = new HttpClientTransport(
-                new HttpClientTransportOptions { Endpoint = endpoint, TransportMode = HttpTransportMode.AutoDetect },
-                _loggerFactory);
-
-            var client = await McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
+            var client = await McpClient.CreateAsync(transportFactory(), clientOptions: null, _loggerFactory, cancellationToken);
 
             await DisposeClientAsync(upstream); // replace any prior client
             upstream.Client = client;
             upstream.State = UpstreamState.Connected;
-            _logger.LogInformation("Connected upstream {Key} at {Endpoint}.", key, endpoint);
+            _logger.LogInformation("Connected upstream {Key} ({Endpoint}).", key, endpointLabel);
             await RebuildAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             upstream.State = UpstreamState.Faulted;
             upstream.LastError = ex.Message;
-            _logger.LogWarning(ex, "Failed to connect upstream {Key} at {Endpoint}.", key, endpoint);
+            _logger.LogWarning(ex, "Failed to connect upstream {Key} ({Endpoint}).", key, endpointLabel);
             await RebuildAsync(cancellationToken);
         }
     }

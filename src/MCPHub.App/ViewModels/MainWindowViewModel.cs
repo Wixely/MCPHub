@@ -18,7 +18,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavItem> NavItems { get; }
 
-    public MainWindowViewModel(ServicesViewModel services, LogsViewModel logs, ProxyViewModel proxy)
+    public MainWindowViewModel(ServicesViewModel services, LogsViewModel logs, ProxyViewModel proxy, SettingsViewModel settings)
     {
         _logs = logs;
         _logsNav = new NavItem("Logs", logs);
@@ -28,9 +28,7 @@ public partial class MainWindowViewModel : ViewModelBase
             new NavItem("Services", services),
             _logsNav,
             new NavItem("Proxy", proxy),
-            new NavItem("Settings", new PlaceholderViewModel(
-                "Settings",
-                "Shared servers folder, download flavour, proxy port, tray behaviour and more arrive in milestone M5.")),
+            new NavItem("Settings", settings),
         ];
 
         _selectedNav = NavItems[0];

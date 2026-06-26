@@ -4,6 +4,7 @@ using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services.Github;
+using MCPHub.Core.Settings;
 using Microsoft.Extensions.Logging;
 
 namespace MCPHub.Core.Services;
@@ -53,6 +54,7 @@ public sealed class ServiceManager : IServiceManager
         IDownloadService downloadService,
         ILogStore logStore,
         IAppPaths appPaths,
+        ISettingsStore settings,
         ILogger<ServiceManager> logger)
     {
         _releaseService = releaseService;
@@ -61,7 +63,11 @@ public sealed class ServiceManager : IServiceManager
         _logStore = logStore;
         _logger = logger;
 
-        ServersFolder = appPaths.DefaultServersDirectory;
+        var current = settings.Current;
+        ServersFolder = string.IsNullOrWhiteSpace(current.SharedServersFolder)
+            ? appPaths.DefaultServersDirectory
+            : current.SharedServersFolder;
+        Flavor = current.Flavor;
         _services = ServiceCatalog.All.Select(entry => new ManagedService(entry, ServersFolder)).ToList();
     }
 
@@ -69,7 +75,7 @@ public sealed class ServiceManager : IServiceManager
 
     public string ServersFolder { get; }
 
-    public PublishFlavor Flavor { get; set; } = PublishFlavor.SelfContained;
+    public PublishFlavor Flavor { get; set; }
 
     public async Task RefreshInstalledAsync(CancellationToken cancellationToken = default)
     {
