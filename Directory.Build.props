@@ -10,6 +10,8 @@
     <Authors>Wixely Holmes</Authors>
     <Product>MCPHub</Product>
     <Company>Wixely Holmes</Company>
+    <Copyright>Copyright (c) 2026 Wixely Holmes</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
 </Project>

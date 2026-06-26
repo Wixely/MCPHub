@@ -1,0 +1,72 @@
+name: Release
+
+# Builds standalone, single-file, self-contained MCPHub apps for Windows and Linux.
+# - On a version tag (v*) it publishes both and attaches them to a GitHub Release.
+# - It can also be run manually (workflow_dispatch) to produce the binaries as artifacts.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [ win-x64, linux-x64 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET (pinned by global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish single-file self-contained (${{ matrix.rid }})
+        run: >
+          dotnet publish src/MCPHub.App/MCPHub.App.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -o publish/${{ matrix.rid }}
+
+      - name: Package
+        run: |
+          cd publish/${{ matrix.rid }}
+          zip -r "../../MCPHub-${{ matrix.rid }}-${{ github.ref_name }}.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MCPHub-${{ matrix.rid }}
+          path: MCPHub-${{ matrix.rid }}-${{ github.ref_name }}.zip
+          if-no-files-found: error
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
