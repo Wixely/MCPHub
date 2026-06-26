@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -59,6 +62,12 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     public string InstallButtonText => !_model.IsInstalled
         ? "Install"
         : _model.UpdateStatus == UpdateStatus.UpdateAvailable ? "Update" : "Reinstall";
+
+    /// <summary>The config file edited by <see cref="EditConfigCommand"/>, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
+    public string ConfigFileName => _model.Catalog.ConfigFileName;
+
+    /// <summary>Whether a config file exists to edit (it ships with the install).</summary>
+    public bool CanEditConfig => File.Exists(_model.ConfigPath);
 
     /// <summary>Checks GitHub for this service's latest release and refreshes the row.</summary>
     [RelayCommand]
@@ -126,6 +135,24 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Opens this service's <c>{Name}.json</c> config in the OS default editor.</summary>
+    [RelayCommand]
+    private void EditConfig()
+    {
+        var path = _model.ConfigPath;
+        if (!File.Exists(path))
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to open config '{path}': {ex.Message}");
+        }
+    }
+
     /// <summary>Switches to the Logs page focused on this service.</summary>
     [RelayCommand]
     private void ViewLogs() => WeakReferenceMessenger.Default.Send(new ShowLogsMessage(Name));
@@ -143,5 +170,6 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
         OnPropertyChanged(nameof(InstallButtonText));
+        OnPropertyChanged(nameof(CanEditConfig));
     }
 }

@@ -6,8 +6,8 @@
         mc:Ignorable="d"
         x:Class="MCPHub.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Width="1180" Height="680"
-        MinWidth="980" MinHeight="500"
+        Width="1240" Height="680"
+        MinWidth="1040" MinHeight="500"
         Icon="/Assets/mcphub.png"
         Title="MCPHub">
 
