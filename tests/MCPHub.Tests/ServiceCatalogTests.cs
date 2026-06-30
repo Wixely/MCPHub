@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_twelve_products()
+    public void Catalog_contains_all_thirteen_products()
     {
-        Assert.Equal(12, ServiceCatalog.All.Count);
+        Assert.Equal(13, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -23,6 +23,7 @@ public class ServiceCatalogTests
     [InlineData("SQLMCPSharp", 5712)]
     [InlineData("GithubMCPSharp", 5701)]
     [InlineData("RemoteAdminMCPSharp", 5706)]
+    [InlineData("RedisMCPSharp", 5713)]
     public void Known_default_ports_are_recorded(string name, int expectedPort)
     {
         var entry = ServiceCatalog.FindByName(name);

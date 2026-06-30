@@ -1,10 +1,10 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 12 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 13 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
-/// Ports for Noteworthy (5710), SQL (5712), GitHub (5701) and RemoteAdmin (5706) are confirmed; the rest are
+/// Ports for Noteworthy (5710), SQL (5712), Redis (5713), GitHub (5701) and RemoteAdmin (5706) are confirmed; the rest are
 /// <see langword="null"/> and resolved from each installed <c>{Name}.json</c> at runtime
 /// rather than hard-coded. Env-var prefixes follow the observed pattern (product name minus the
 /// trailing "Sharp", upper-cased, plus "_") and are verified against the installed config later.
@@ -19,6 +19,9 @@ public static class ServiceCatalog
 
         new("SQLMCPSharp", "Wixely", "SQLMCPSharp",
             "SQL", "SQL databases (MSSQL, MySQL, …) MCP server", 5712, "SQLMCP_"),
+
+        new("RedisMCPSharp", "Wixely", "RedisMCPSharp",
+            "Redis", "Redis data store (read/write, search, diagnostics) MCP server", 5713, "REDISMCP_"),
 
         new("GithubMCPSharp", "Wixely", "GithubMCPSharp",
             "GitHub", "GitHub repositories & issues MCP server", 5701, "GITHUBMCP_"),
