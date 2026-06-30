@@ -1,10 +1,10 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 11 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 12 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
-/// Ports for Noteworthy (5710), SQL (5712) and GitHub (5701) are confirmed; the rest are
+/// Ports for Noteworthy (5710), SQL (5712), GitHub (5701) and RemoteAdmin (5706) are confirmed; the rest are
 /// <see langword="null"/> and resolved from each installed <c>{Name}.json</c> at runtime
 /// rather than hard-coded. Env-var prefixes follow the observed pattern (product name minus the
 /// trailing "Sharp", upper-cased, plus "_") and are verified against the installed config later.
@@ -40,6 +40,9 @@ public static class ServiceCatalog
 
         new("RouterOSMCPSharp", "Wixely", "RouterOSMCPSharp",
             "RouterOS", "MikroTik RouterOS MCP server", null, "ROUTEROSMCP_"),
+
+        new("RemoteAdminMCPSharp", "Wixely", "RemoteAdminMCPSharp",
+            "Remote Admin", "Remote administration (Windows WinRM / Linux SSH) MCP server", 5706, "REMOTEADMINMCP_"),
 
         new("ChromeDevToolsMCPSharp", "Wixely", "ChromeDevToolsMCPSharp",
             "Chrome DevTools", "Chrome DevTools Protocol MCP server", null, "CHROMEDEVTOOLSMCP_"),
