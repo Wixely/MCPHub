@@ -70,4 +70,7 @@ public sealed class MCPHubSettings
     public double WindowHeight { get; set; } = 680;
 
     public List<UserMcpServerDefinition> UserServers { get; set; } = [];
+
+    /// <summary>Catalog names of services MCPHub starts automatically on launch (per-service "auto-run").</summary>
+    public List<string> AutoStartServices { get; set; } = [];
 }

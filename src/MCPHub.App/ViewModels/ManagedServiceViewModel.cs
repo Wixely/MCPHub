@@ -9,6 +9,7 @@ using MCPHub.App.Messages;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
+using MCPHub.Core.Settings;
 
 namespace MCPHub.App.ViewModels;
 
@@ -18,6 +19,7 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     private readonly ManagedService _model;
     private readonly IServiceManager _manager;
     private readonly IServiceProcessHost _processHost;
+    private readonly ISettingsStore _settings;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -28,11 +30,37 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     [ObservableProperty]
     private double _installProgress;
 
-    public ManagedServiceViewModel(ManagedService model, IServiceManager manager, IServiceProcessHost processHost)
+    /// <summary>When checked, MCPHub starts this service automatically on launch.</summary>
+    [ObservableProperty]
+    private bool _autoRun;
+
+    public ManagedServiceViewModel(ManagedService model, IServiceManager manager, IServiceProcessHost processHost, ISettingsStore settings)
     {
         _model = model;
         _manager = manager;
         _processHost = processHost;
+        _settings = settings;
+        _autoRun = settings.Current.AutoStartServices.Contains(Name);
+    }
+
+    /// <summary>Persists the auto-run choice whenever the checkbox is toggled.</summary>
+    partial void OnAutoRunChanged(bool value)
+    {
+        var list = _settings.Current.AutoStartServices;
+        list.RemoveAll(n => string.Equals(n, Name, StringComparison.OrdinalIgnoreCase));
+        if (value)
+            list.Add(Name);
+        _ = _settings.SaveAsync();
+    }
+
+    /// <summary>Starts the service at launch if it's flagged auto-run and currently able to start.</summary>
+    public async Task StartForAutoRunAsync()
+    {
+        if (!AutoRun || !CanStart)
+            return;
+
+        await _processHost.StartAsync(_model);
+        SyncFromModel();
     }
 
     public string Name => _model.Catalog.Name;
