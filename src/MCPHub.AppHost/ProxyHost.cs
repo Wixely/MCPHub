@@ -15,7 +15,7 @@ public sealed class ProxyHost
 {
     private readonly IUpstreamRegistry _registry;
     private readonly ProxyHandlers _handlers;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private WebApplication? _app;
 
@@ -23,7 +23,7 @@ public sealed class ProxyHost
     {
         _registry = registry;
         _handlers = handlers;
-        _loggerFactory = loggerFactory;
+        _logger = loggerFactory.CreateLogger<ProxyHost>();
     }
 
     public bool IsRunning => _app is not null;
@@ -76,6 +76,7 @@ public sealed class ProxyHost
 
             await app.StartAsync(cancellationToken);
             _app = app;
+            _logger.LogInformation("Proxy started at {Endpoint}.", EndpointUrl);
         }
         finally
         {
@@ -94,6 +95,7 @@ public sealed class ProxyHost
             await _app.StopAsync();
             await _app.DisposeAsync();
             _app = null;
+            _logger.LogInformation("Proxy stopped.");
         }
         finally
         {

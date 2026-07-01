@@ -11,6 +11,7 @@ using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
 using MCPHub.Proxy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MCPHub.App;
 
@@ -23,6 +24,9 @@ public static class Composition
     public static void ConfigureServices(IServiceCollection services)
     {
         services.AddLogging();
+
+        // Tee the proxy's own ILogger output into the log store so it surfaces on the Logs page.
+        services.AddSingleton<ILoggerProvider, LogStoreLoggerProvider>();
 
         // Settings + secrets
         services.AddSingleton<IAppPaths, AppPaths>();

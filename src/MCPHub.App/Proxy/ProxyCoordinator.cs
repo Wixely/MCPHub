@@ -54,7 +54,6 @@ public sealed class ProxyCoordinator
         try
         {
             await _proxyHost.StartAsync(settings.ProxyBindAddress, settings.ProxyPort);
-            _logger.LogInformation("Proxy listening at {Endpoint}.", _proxyHost.EndpointUrl);
         }
         catch (Exception ex)
         {

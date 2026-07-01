@@ -64,4 +64,26 @@ public class LogStoreTests
 
         Assert.Empty(store.Snapshot("a"));
     }
+
+    [Fact]
+    public void Services_lists_only_keys_that_have_produced_output()
+    {
+        var store = new LogStore();
+        Assert.Empty(store.Services);
+
+        store.Append("a", Line("x"));
+
+        Assert.Contains("a", store.Services);
+        Assert.DoesNotContain("b", store.Services);
+    }
+
+    [Fact]
+    public void Clear_drops_the_service_from_Services()
+    {
+        var store = new LogStore();
+        store.Append("a", Line("x"));
+        store.Clear("a");
+
+        Assert.DoesNotContain("a", store.Services);
+    }
 }

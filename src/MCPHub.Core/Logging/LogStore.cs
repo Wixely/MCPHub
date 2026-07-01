@@ -25,6 +25,9 @@ public interface ILogStore
     /// <summary>Maximum lines retained per service before the oldest are dropped.</summary>
     int Capacity { get; }
 
+    /// <summary>Service keys that currently have at least one buffered line (i.e. produced output this session).</summary>
+    IReadOnlyCollection<string> Services { get; }
+
     void Append(string service, LogLine line);
 
     /// <summary>Returns a point-in-time copy of a service's buffered lines (oldest first).</summary>
@@ -45,6 +48,15 @@ public sealed class LogStore : ILogStore
     public LogStore(int capacity = 5000) => Capacity = capacity;
 
     public int Capacity { get; }
+
+    public IReadOnlyCollection<string> Services
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _buffers.Keys];
+        }
+    }
 
     public event Action<string, LogLine>? LineAppended;
 

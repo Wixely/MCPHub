@@ -5,7 +5,6 @@ using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MCPHub.Core.Catalog;
 using MCPHub.Core.Logging;
 
 namespace MCPHub.App.ViewModels;
@@ -34,7 +33,15 @@ public sealed partial class LogsViewModel : ViewModelBase
     public LogsViewModel(ILogStore logStore)
     {
         _logStore = logStore;
-        ServiceNames = new ObservableCollection<string>(ServiceCatalog.All.Select(e => e.Name));
+
+        // "MCPHub Proxy" is pinned at the top. A managed service is listed only once it has produced
+        // output this session (started/faulted/etc.); services stay alphabetical below the proxy.
+        ServiceNames = new ObservableCollection<string> { LogStoreLoggerProvider.ProxyLogKey };
+        foreach (var service in logStore.Services
+                     .Where(s => !string.Equals(s, LogStoreLoggerProvider.ProxyLogKey, StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+            ServiceNames.Add(service);
+
         _logStore.LineAppended += OnLineAppended;
         SelectedService = ServiceNames.FirstOrDefault();
     }
@@ -42,6 +49,10 @@ public sealed partial class LogsViewModel : ViewModelBase
     /// <summary>Selects a service by name (used when navigating from a service row).</summary>
     public void SelectService(string name)
     {
+        // A row's "Logs" action may target a service that just started — surface it if it has any output.
+        if (!ServiceNames.Contains(name) && _logStore.Snapshot(name).Count > 0)
+            EnsureListed(name);
+
         if (ServiceNames.Contains(name))
             SelectedService = name;
     }
@@ -63,16 +74,30 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     private void OnLineAppended(string service, LogLine line)
     {
-        if (!string.Equals(service, SelectedService, StringComparison.OrdinalIgnoreCase))
-            return;
-
         Dispatcher.UIThread.Post(() =>
         {
-            if (!string.Equals(service, SelectedService, StringComparison.OrdinalIgnoreCase) || !PassesFilter(line))
-                return;
-            Lines.Add(line);
-            LinesChanged?.Invoke();
+            EnsureListed(service);
+
+            if (string.Equals(service, SelectedService, StringComparison.OrdinalIgnoreCase) && PassesFilter(line))
+            {
+                Lines.Add(line);
+                LinesChanged?.Invoke();
+            }
         });
+    }
+
+    /// <summary>Adds a service to the selector the first time it emits output — alphabetical, below the pinned proxy.</summary>
+    private void EnsureListed(string service)
+    {
+        if (string.Equals(service, LogStoreLoggerProvider.ProxyLogKey, StringComparison.OrdinalIgnoreCase)
+            || ServiceNames.Contains(service))
+            return;
+
+        var index = 1;
+        while (index < ServiceNames.Count &&
+               string.Compare(ServiceNames[index], service, StringComparison.OrdinalIgnoreCase) < 0)
+            index++;
+        ServiceNames.Insert(index, service);
     }
 
     private bool PassesFilter(LogLine line)
