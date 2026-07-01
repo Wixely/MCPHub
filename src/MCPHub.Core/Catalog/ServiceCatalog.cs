@@ -1,9 +1,12 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 13 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 14 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
+/// Most products live in a repo named after the product. The exception is <c>RepoDetoxMCPSharp</c>,
+/// whose HTTP MCP server ships inside the multi-app <c>RepoDetox</c> repo (alongside a CLI and GUI),
+/// so its <c>RepoName</c> differs from its <c>Name</c> and it is published self-contained only.
 /// Ports for Noteworthy (5710), SQL (5712), Redis (5713), GitHub (5701) and RemoteAdmin (5706) are confirmed; the rest are
 /// <see langword="null"/> and resolved from each installed <c>{Name}.json</c> at runtime
 /// rather than hard-coded. Env-var prefixes follow the observed pattern (product name minus the
@@ -52,6 +55,11 @@ public static class ServiceCatalog
 
         new("PlaywrightMCPSharp", "Wixely", "PlaywrightMCPSharp",
             "Playwright", "Playwright browser automation MCP server", null, "PLAYWRIGHTMCP_"),
+
+        // Non-standard: RepoDetoxMCPSharp is one of three apps (CLI, GUI, MCP) shipped from the
+        // "RepoDetox" repo, so RepoName ≠ Name. Published self-contained only; port read from config.
+        new("RepoDetoxMCPSharp", "Wixely", "RepoDetox",
+            "Repo Detox", "Git history cleaner / anonymiser MCP server", null, "REPODETOXMCP_"),
     ];
 
     /// <summary>Look up a catalog entry by its canonical <see cref="ServiceCatalogEntry.Name"/>.</summary>

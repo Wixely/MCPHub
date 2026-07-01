@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_thirteen_products()
+    public void Catalog_contains_all_fourteen_products()
     {
-        Assert.Equal(13, ServiceCatalog.All.Count);
+        Assert.Equal(14, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -44,5 +44,22 @@ public class ServiceCatalogTests
         var entry = ServiceCatalog.FindByName("PlaywrightMCPSharp")!;
         var asset = entry.AssetFileName("win", "self-contained", "v1.1.6");
         Assert.Equal("PlaywrightMCPSharp-win-x64-self-contained-v1.1.6.zip", asset);
+    }
+
+    [Fact]
+    public void RepoDetox_maps_the_mcp_product_onto_its_multi_app_repo()
+    {
+        var entry = ServiceCatalog.FindByName("RepoDetoxMCPSharp")!;
+
+        // Non-standard: the MCP server ships inside the "RepoDetox" repo (with a CLI + GUI), so the
+        // GitHub coordinates use the repo name while product/exe/config naming uses the product name.
+        Assert.Equal("RepoDetox", entry.RepoName);
+        Assert.Equal("https://api.github.com/repos/Wixely/RepoDetox/releases/latest", entry.LatestReleaseApiUrl);
+
+        // The installer must resolve the MCP asset — not the RepoDetox-cli / RepoDetox-gui zips.
+        Assert.Equal("RepoDetoxMCPSharp-win-x64-self-contained-v1.5.1.zip",
+            entry.AssetFileName("win", "self-contained", "v1.5.1"));
+        Assert.Equal("RepoDetoxMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("repodetox", entry.Key);
     }
 }
