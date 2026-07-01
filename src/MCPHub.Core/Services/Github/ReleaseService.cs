@@ -62,6 +62,12 @@ public sealed class ReleaseService : IReleaseService
                 return _cache.TryGetValue(url, out var stale) ? stale.Info : null;
             }
 
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning("GitHub rejected the configured token (401) while checking {Service}.", entry.Name);
+                throw new GithubAuthException("GitHub rejected the configured token (401 Unauthorized).");
+            }
+
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);

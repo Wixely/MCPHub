@@ -113,7 +113,18 @@ public sealed class ServiceManager : IServiceManager
     {
         var catalog = service.Catalog;
 
-        var release = await _releaseService.GetLatestReleaseAsync(catalog, cancellationToken);
+        ReleaseInfo? release;
+        try
+        {
+            release = await _releaseService.GetLatestReleaseAsync(catalog, cancellationToken);
+        }
+        catch (GithubAuthException)
+        {
+            _logStore.Append(catalog.Name, new LogLine(DateTimeOffset.Now, LogStream.Info,
+                "GitHub rejected your token (401). Clear or replace it in Settings → GitHub token."));
+            throw;
+        }
+
         if (release is null)
         {
             _logStore.Append(catalog.Name, new LogLine(DateTimeOffset.Now, LogStream.Info,

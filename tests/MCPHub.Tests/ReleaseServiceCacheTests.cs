@@ -77,6 +77,16 @@ public sealed class ReleaseServiceCacheTests : IDisposable
         Assert.Equal("2.3.4", info!.Version); // served from the persisted cache instead of collapsing to "—"
     }
 
+    [Fact]
+    public async Task Unauthorized_response_throws_a_distinct_auth_exception()
+    {
+        var entry = ServiceCatalog.FindByName("NoteworthyMCPSharp")!;
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        var svc = new ReleaseService(Factory(handler), Paths(_dir), NullLogger<ReleaseService>.Instance);
+
+        await Assert.ThrowsAsync<GithubAuthException>(() => svc.GetLatestReleaseAsync(entry));
+    }
+
     private static HttpResponseMessage Ok(string version, string etag)
     {
         var body = "{\"tag_name\":\"v" + version + "\",\"prerelease\":false,\"assets\":[]}";

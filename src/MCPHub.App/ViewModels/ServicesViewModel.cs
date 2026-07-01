@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
+using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
 
 namespace MCPHub.App.ViewModels;
@@ -115,6 +116,10 @@ public sealed partial class ServicesViewModel : ViewModelBase
                 : updatesAvailable > 0
                     ? $"{updatesAvailable} update(s) available across {reachable} services."
                     : $"Checked {reachable} services — installed copies are up to date.";
+        }
+        catch (GithubAuthException)
+        {
+            StatusMessage = "GitHub rejected your token (401). Clear or replace it in Settings → GitHub token.";
         }
         finally
         {
