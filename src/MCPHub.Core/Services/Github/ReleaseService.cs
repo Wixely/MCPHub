@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using MCPHub.Core.Catalog;
+using MCPHub.Core.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 namespace MCPHub.Core.Services.Github;
@@ -21,11 +22,15 @@ public sealed class ReleaseService : IReleaseService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ReleaseService> _logger;
     private readonly ConcurrentDictionary<string, CachedRelease> _cache = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+    private readonly string _cachePath;
 
-    public ReleaseService(IHttpClientFactory httpClientFactory, ILogger<ReleaseService> logger)
+    public ReleaseService(IHttpClientFactory httpClientFactory, IAppPaths appPaths, ILogger<ReleaseService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _cachePath = Path.Combine(appPaths.DataDirectory, "release-cache.json");
+        LoadCache();
     }
 
     public async Task<ReleaseInfo?> GetLatestReleaseAsync(ServiceCatalogEntry entry, CancellationToken cancellationToken = default)
@@ -81,7 +86,10 @@ public sealed class ReleaseService : IReleaseService
                 Assets: assets);
 
             if (response.Headers.ETag is { } etag)
+            {
                 _cache[url] = new CachedRelease(etag, info);
+                await SaveCacheAsync();
+            }
 
             return info;
         }
@@ -93,6 +101,59 @@ public sealed class ReleaseService : IReleaseService
         {
             _logger.LogWarning(ex, "Failed to fetch latest release for {Service}.", entry.Name);
             return null;
+        }
+    }
+
+    private void LoadCache()
+    {
+        try
+        {
+            if (!File.Exists(_cachePath))
+                return;
+
+            var json = File.ReadAllText(_cachePath);
+            var file = JsonSerializer.Deserialize(json, ReleaseCacheJsonContext.Default.ReleaseCacheFile);
+            if (file is null)
+                return;
+
+            foreach (var (url, entry) in file.Entries)
+            {
+                if (entry.Info is not null
+                    && EntityTagHeaderValue.TryParse(entry.ETag, out var etag)
+                    && etag is not null)
+                {
+                    _cache[url] = new CachedRelease(etag, entry.Info);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or FormatException)
+        {
+            _logger.LogWarning(ex, "Could not read the release cache; starting empty.");
+        }
+    }
+
+    private async Task SaveCacheAsync()
+    {
+        var file = new ReleaseCacheFile();
+        foreach (var (url, cached) in _cache)
+            file.Entries[url] = new ReleaseCacheEntry { ETag = cached.ETag.ToString(), Info = cached.Info };
+
+        await _saveGate.WaitAsync();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
+            var json = JsonSerializer.Serialize(file, ReleaseCacheJsonContext.Default.ReleaseCacheFile);
+            var tmp = _cachePath + ".tmp";
+            await File.WriteAllTextAsync(tmp, json);
+            File.Move(tmp, _cachePath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not persist the release cache.");
+        }
+        finally
+        {
+            _saveGate.Release();
         }
     }
 
