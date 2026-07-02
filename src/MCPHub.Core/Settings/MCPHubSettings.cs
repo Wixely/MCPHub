@@ -73,4 +73,16 @@ public sealed class MCPHubSettings
 
     /// <summary>Catalog names of services MCPHub starts automatically on launch (per-service "auto-run").</summary>
     public List<string> AutoStartServices { get; set; } = [];
+
+    /// <summary>Dedicated folder DaggerAgent is installed into; <see langword="null"/> = default (<c>{Data}/agent</c>).</summary>
+    public string? AgentFolder { get; set; }
+
+    /// <summary>Auto-start DaggerAgent's interactive CLI (REPL) when MCPHub launches.</summary>
+    public bool AutoStartAgentCli { get; set; }
+
+    /// <summary>Auto-start DaggerAgent in Web (serve) mode when MCPHub launches.</summary>
+    public bool AutoStartAgentWeb { get; set; }
+
+    /// <summary>Auto-start DaggerAgent in Jobs (serve + poller) mode when MCPHub launches.</summary>
+    public bool AutoStartAgentJobs { get; set; }
 }

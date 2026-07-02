@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="620"
+             x:Class="MCPHub.App.Views.AgentView"
+             x:DataType="vm:AgentViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="16" MaxWidth="820" HorizontalAlignment="Left">
+
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding DisplayName}" FontSize="20" FontWeight="SemiBold"/>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="{Binding Description}" Opacity="0.65" VerticalAlignment="Center"/>
+          <HyperlinkButton Content="GitHub" NavigateUri="https://github.com/Wixely/DaggerAgent"
+                           Padding="0" VerticalAlignment="Center"/>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Install / version card -->
+      <Border Background="#14000000" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="120,120,*,Auto" ColumnSpacing="16">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Installed" Opacity="0.6" FontSize="12"/>
+              <TextBlock Text="{Binding InstalledVersion}" FontWeight="SemiBold"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="2">
+              <TextBlock Text="Latest" Opacity="0.6" FontSize="12"/>
+              <TextBlock Text="{Binding LatestVersion}" FontWeight="SemiBold"/>
+            </StackPanel>
+            <Button Grid.Column="2" Content="Check for updates" HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Command="{Binding CheckUpdatesCommand}" IsEnabled="{Binding !IsBusy}"/>
+            <Panel Grid.Column="3" VerticalAlignment="Center">
+              <Button Content="{Binding InstallButtonText}" Width="96" HorizontalContentAlignment="Center"
+                      Command="{Binding InstallCommand}" IsVisible="{Binding !IsInstalling}"/>
+              <ProgressBar IsVisible="{Binding IsInstalling}" Minimum="0" Maximum="1" Width="96"
+                           Value="{Binding InstallProgress}" Height="8"/>
+            </Panel>
+          </Grid>
+          <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                     IsVisible="{Binding HasStatus}"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Run modes -->
+      <StackPanel Spacing="10">
+        <TextBlock Text="Run" FontWeight="SemiBold"/>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                  Background="{Binding RunState, Converter={StaticResource RunStateToBrush}}"/>
+          <TextBlock VerticalAlignment="Center" FontSize="12" Opacity="0.85">
+            <Run Text="{Binding RunStateText}"/><Run Text="   ·   serving: "/><Run Text="{Binding ServingModeText}"/>
+          </TextBlock>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Open CLI" Command="{Binding StartCliCommand}" IsEnabled="{Binding IsInstalled}"
+                  ToolTip.Tip="Launch the interactive REPL in its own console window (independent of MCPHub)"/>
+          <Button Content="Web" Command="{Binding StartWebCommand}" IsEnabled="{Binding IsInstalled}"
+                  ToolTip.Tip="Run 'dagger serve' and open the agent web UI in your browser"/>
+          <Button Content="Jobs" Command="{Binding StartJobsCommand}" IsEnabled="{Binding IsInstalled}"
+                  ToolTip.Tip="Run 'dagger serve' with the ticket poller enabled, and open the jobs UI"/>
+          <Button Content="Stop" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Auto-start -->
+      <StackPanel Spacing="6">
+        <TextBlock Text="Auto-start when MCPHub launches" FontWeight="SemiBold"/>
+        <CheckBox Content="CLI (interactive REPL)" IsChecked="{Binding AutoStartCli}"/>
+        <CheckBox Content="Web (serve + open browser)" IsChecked="{Binding AutoStartWeb}"/>
+        <CheckBox Content="Jobs (serve + poller)" IsChecked="{Binding AutoStartJobs}"/>
+        <TextBlock Text="Web and Jobs share the serve port, so only one of them can auto-start."
+                   Opacity="0.55" FontSize="11"/>
+      </StackPanel>
+
+      <!-- Config + logs -->
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <Button Content="Config" Command="{Binding EditConfigCommand}" IsEnabled="{Binding CanEditConfig}"
+                ToolTip.Tip="{Binding ConfigFileName}"/>
+        <TextBlock Text="On first install its MCP config is auto-wired to the MCPHub proxy. Output streams into the Logs tab (as &quot;DaggerAgent&quot;)."
+                   Opacity="0.55" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

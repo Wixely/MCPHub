@@ -3,8 +3,10 @@ using System.Net.Http.Headers;
 using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
 using MCPHub.AppHost;
+using MCPHub.Core.Agent;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
+using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
@@ -61,9 +63,23 @@ public static class Composition
             client.DefaultRequestHeaders.UserAgent.ParseAdd("MCPHub/0.1");
         });
 
+        // DaggerAgent — a managed agent app installed into its own folder with selectable run modes.
+        services.AddSingleton(sp =>
+        {
+            var paths = sp.GetRequiredService<IAppPaths>();
+            var settings = sp.GetRequiredService<ISettingsStore>();
+            var folder = string.IsNullOrWhiteSpace(settings.Current.AgentFolder)
+                ? Path.Combine(paths.DataDirectory, "agent")
+                : settings.Current.AgentFolder!;
+            return new AgentContext(new ManagedService(DaggerAgent.Catalog, folder));
+        });
+        services.AddSingleton<IAgentProcessHost, AgentProcessHost>();
+        services.AddSingleton<IAgentService, AgentService>();
+
         // View-models
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
+        services.AddSingleton<AgentViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
         services.AddSingleton<SettingsViewModel>();

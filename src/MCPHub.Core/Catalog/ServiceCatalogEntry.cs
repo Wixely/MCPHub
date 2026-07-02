@@ -22,6 +22,14 @@ namespace MCPHub.Core.Catalog;
 /// <param name="EnvPrefix">
 /// Per-service environment-variable override prefix, e.g. <c>"NOTEWORTHYMCP_"</c> (with <c>__</c> nesting).
 /// </param>
+/// <param name="ExecutableBaseName">
+/// Executable base name when it differs from <paramref name="Name"/> (e.g. <c>"dagger"</c> for the
+/// <c>DaggerAgent</c> product); <see langword="null"/> falls back to <paramref name="Name"/>.
+/// </param>
+/// <param name="ConfigFileNameOverride">
+/// Config file name when it isn't <c>{Name}.json</c> (e.g. <c>"appsettings.json"</c>); <see langword="null"/>
+/// falls back to <c>{Name}.json</c>.
+/// </param>
 public sealed record ServiceCatalogEntry(
     string Name,
     string RepoOwner,
@@ -29,10 +37,15 @@ public sealed record ServiceCatalogEntry(
     string DisplayName,
     string Description,
     int? DefaultPort,
-    string EnvPrefix)
+    string EnvPrefix,
+    string? ExecutableBaseName = null,
+    string? ConfigFileNameOverride = null)
 {
-    /// <summary>Config file name read next to the executable, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
-    public string ConfigFileName => $"{Name}.json";
+    /// <summary>
+    /// Config file name read next to the executable, e.g. <c>NoteworthyMCPSharp.json</c> — or
+    /// <see cref="ConfigFileNameOverride"/> when the product uses a non-standard name (e.g. <c>appsettings.json</c>).
+    /// </summary>
+    public string ConfigFileName => ConfigFileNameOverride ?? $"{Name}.json";
 
     /// <summary>
     /// Short lowercase slug used to namespace this server's tools in the proxy (product name minus the
@@ -42,8 +55,15 @@ public sealed record ServiceCatalogEntry(
         ? Name[..^"MCPSharp".Length].ToLowerInvariant()
         : Name.ToLowerInvariant();
 
-    /// <summary>Executable file name for the given OS (<c>{Name}.exe</c> on Windows, <c>{Name}</c> elsewhere).</summary>
-    public string ExecutableFileName(bool isWindows) => isWindows ? $"{Name}.exe" : Name;
+    /// <summary>
+    /// Executable file name for the given OS (<c>{base}.exe</c> on Windows, <c>{base}</c> elsewhere),
+    /// where <c>base</c> is <see cref="ExecutableBaseName"/> when set, otherwise <see cref="Name"/>.
+    /// </summary>
+    public string ExecutableFileName(bool isWindows)
+    {
+        var baseName = ExecutableBaseName ?? Name;
+        return isWindows ? $"{baseName}.exe" : baseName;
+    }
 
     /// <summary>Executable file name for the current OS.</summary>
     public string ExecutableFileName() => ExecutableFileName(RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
