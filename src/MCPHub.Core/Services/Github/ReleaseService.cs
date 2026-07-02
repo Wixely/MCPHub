@@ -110,6 +110,9 @@ public sealed class ReleaseService : IReleaseService
         }
     }
 
+    public ReleaseInfo? GetCachedRelease(ServiceCatalogEntry entry)
+        => _cache.TryGetValue(entry.LatestReleaseApiUrl, out var cached) ? cached.Info : null;
+
     private void LoadCache()
     {
         try

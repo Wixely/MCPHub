@@ -11,4 +11,10 @@ public interface IReleaseService
     /// Throws <see cref="GithubAuthException"/> when GitHub rejects the configured token (HTTP 401).
     /// </summary>
     Task<ReleaseInfo?> GetLatestReleaseAsync(ServiceCatalogEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the last release resolved for a product from the persisted cache, with no network request,
+    /// or <see langword="null"/> if nothing has been cached yet.
+    /// </summary>
+    ReleaseInfo? GetCachedRelease(ServiceCatalogEntry entry);
 }

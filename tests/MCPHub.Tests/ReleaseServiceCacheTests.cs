@@ -87,6 +87,22 @@ public sealed class ReleaseServiceCacheTests : IDisposable
         await Assert.ThrowsAsync<GithubAuthException>(() => svc.GetLatestReleaseAsync(entry));
     }
 
+    [Fact]
+    public async Task GetCachedRelease_returns_the_cached_version_without_a_request()
+    {
+        var entry = ServiceCatalog.FindByName("NoteworthyMCPSharp")!;
+        var handler = new StubHandler(_ => Ok("3.1.4", "\"etag-c\""));
+        var svc = new ReleaseService(Factory(handler), Paths(_dir), NullLogger<ReleaseService>.Instance);
+
+        Assert.Null(svc.GetCachedRelease(entry));   // nothing cached yet
+        await svc.GetLatestReleaseAsync(entry);      // 200 seeds the cache
+        Assert.Equal(1, handler.Calls);
+
+        var cached = svc.GetCachedRelease(entry);
+        Assert.Equal("3.1.4", cached!.Version);
+        Assert.Equal(1, handler.Calls);              // no extra request — served from the in-memory cache
+    }
+
     private static HttpResponseMessage Ok(string version, string etag)
     {
         var body = "{\"tag_name\":\"v" + version + "\",\"prerelease\":false,\"assets\":[]}";

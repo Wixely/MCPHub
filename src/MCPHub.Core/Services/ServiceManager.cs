@@ -31,6 +31,12 @@ public interface IServiceManager
     Task<ReleaseInfo?> CheckForUpdatesAsync(ManagedService service, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Applies the last-known latest version from the persisted release cache (no network request),
+    /// updating the service's status. Returns <see langword="true"/> if a cached version was found.
+    /// </summary>
+    bool ApplyCachedLatest(ManagedService service);
+
+    /// <summary>
     /// Downloads the latest release (in the configured <see cref="Flavor"/>) and installs it into the
     /// shared folder, preserving the user's config. Reports a 0..1 download fraction via
     /// <paramref name="progress"/>. Throws if no release/asset is available.
@@ -107,6 +113,17 @@ public sealed class ServiceManager : IServiceManager
 
         service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
         return release;
+    }
+
+    public bool ApplyCachedLatest(ManagedService service)
+    {
+        var cached = _releaseService.GetCachedRelease(service.Catalog);
+        if (cached is null)
+            return false;
+
+        service.LatestVersion = cached.Version;
+        service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
+        return true;
     }
 
     public async Task InstallOrUpdateAsync(ManagedService service, IProgress<double>? progress = null, CancellationToken cancellationToken = default)

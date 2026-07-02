@@ -41,12 +41,27 @@ public sealed partial class ServicesViewModel : ViewModelBase
         _ = InitializeAsync();
     }
 
-    /// <summary>First-load routine: read installed versions, launch auto-run services, then check GitHub.</summary>
+    /// <summary>
+    /// First-load routine: read installed versions and launch auto-run services. Latest versions come from
+    /// the persisted release cache with no network call; GitHub is queried automatically only the first time
+    /// (no cache yet) — afterwards the user refreshes with "Check for updates".
+    /// </summary>
     private async Task InitializeAsync()
     {
         await LoadInstalledAsync();
         await StartAutoRunServicesAsync();
-        await CheckAllUpdatesAsync();
+
+        var cacheHits = 0;
+        foreach (var vm in Services)
+        {
+            if (vm.ApplyCachedLatest())
+                cacheHits++;
+        }
+
+        if (cacheHits > 0)
+            StatusMessage = "Showing last-known versions — click 'Check for updates' to refresh.";
+        else
+            await CheckAllUpdatesAsync();
     }
 
     private async Task StartAutoRunServicesAsync()

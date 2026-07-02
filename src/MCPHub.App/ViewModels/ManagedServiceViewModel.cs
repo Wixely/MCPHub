@@ -116,6 +116,15 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Populates Latest from the persisted release cache without any network call; true on a cache hit.</summary>
+    public bool ApplyCachedLatest()
+    {
+        var hit = _manager.ApplyCachedLatest(_model);
+        if (hit)
+            SyncFromModel();
+        return hit;
+    }
+
     /// <summary>Starts the service hidden; run-state then advances via health probes.</summary>
     [RelayCommand]
     private async Task StartAsync()
