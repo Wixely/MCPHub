@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="860" d:DesignHeight="600"
+             x:Class="MCPHub.App.Views.DiagnosticsView"
+             x:DataType="vm:DiagnosticsViewModel">
+
+  <DockPanel Margin="24">
+
+    <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
+      <TextBlock Text="Diagnostics" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Text="Every connected MCP server and the tool calls it exposes through the proxy — expand a server to see its calls."
+                 Opacity="0.65" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,0,0,8">
+      <TextBox Grid.Column="0" Watermark="Filter calls by name…" Text="{Binding FilterText}"/>
+      <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}"/>
+    </Grid>
+
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" Opacity="0.6" FontSize="12" Margin="2,0,0,10"/>
+
+    <ScrollViewer>
+      <StackPanel>
+
+        <ItemsControl ItemsSource="{Binding Servers}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DiagnosticsServerViewModel">
+              <Expander Margin="0,0,0,6" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                  <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Stretch">
+                    <Border Grid.Column="0" Width="9" Height="9" CornerRadius="5" VerticalAlignment="Center" Margin="0,0,10,0"
+                            Background="{Binding State, Converter={StaticResource UpstreamStateToBrush}}"
+                            ToolTip.Tip="{Binding StateText}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                      <SelectableTextBlock Text="{Binding Endpoint}" Opacity="0.45" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding ToolCountText}" Opacity="0.7" FontSize="12" VerticalAlignment="Center"/>
+                  </Grid>
+                </Expander.Header>
+
+                <StackPanel Spacing="0" Margin="4,2,0,4">
+                  <TextBlock Text="{Binding LastError}" Foreground="#F0846B" FontSize="11" Margin="0,0,0,6"
+                             IsVisible="{Binding HasError}" TextWrapping="Wrap"/>
+                  <ItemsControl ItemsSource="{Binding Tools}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DiagnosticsToolViewModel">
+                        <Border BorderBrush="#14000000" BorderThickness="0,0,0,1" Padding="2,6">
+                          <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                              <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                              <SelectableTextBlock Text="{Binding ExposedName}" Opacity="0.4" FontSize="11" VerticalAlignment="Center"
+                                                   IsVisible="{Binding HasExposedName}"/>
+                            </StackPanel>
+                            <SelectableTextBlock Text="{Binding Description}" Opacity="0.6" FontSize="12" TextWrapping="Wrap"
+                                                 IsVisible="{Binding HasDescription}"/>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Expander>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Text="No connected servers yet — start a service on the Services tab and the proxy on the Proxy tab."
+                   Opacity="0.55" FontSize="12" Margin="2,6,0,0" IsVisible="{Binding !HasServers}"/>
+
+      </StackPanel>
+    </ScrollViewer>
+
+  </DockPanel>
+</UserControl>

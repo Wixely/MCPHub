@@ -82,6 +82,7 @@ public static class Composition
         services.AddSingleton<AgentViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
+        services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<SettingsViewModel>();
     }
 
