@@ -64,6 +64,8 @@
                   ToolTip.Tip="Run 'dagger serve' with the ticket poller enabled, and open the jobs UI"/>
           <Button Content="Stop" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
         </StackPanel>
+        <CheckBox Content="Bind to all interfaces (0.0.0.0)" IsChecked="{Binding BindAllInterfaces}"
+                  ToolTip.Tip="Serve on 0.0.0.0 so the agent is reachable from other machines on your network. MCPHub still opens the UI on localhost. Takes effect the next time you start Web/Jobs."/>
       </StackPanel>
 
       <!-- Auto-start -->
@@ -80,6 +82,8 @@
       <StackPanel Orientation="Horizontal" Spacing="12">
         <Button Content="Config" Command="{Binding EditConfigCommand}" IsEnabled="{Binding CanEditConfig}"
                 ToolTip.Tip="{Binding ConfigFileName}"/>
+        <Button Content="Open in Explorer" Command="{Binding OpenFolderCommand}"
+                ToolTip.Tip="Open the folder DaggerAgent is installed in"/>
         <TextBlock Text="On first install its MCP config is auto-wired to the MCPHub proxy. Output streams into the Logs tab (as &quot;DaggerAgent&quot;)."
                    Opacity="0.55" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
       </StackPanel>

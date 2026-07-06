@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Wixely Holmes</Authors>
     <Product>MCPHub</Product>
     <Company>Wixely Holmes</Company>

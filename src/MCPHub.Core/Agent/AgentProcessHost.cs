@@ -28,9 +28,11 @@ public interface IAgentProcessHost : IAsyncDisposable
     /// <summary>
     /// Starts a serve mode (Web/Jobs); stops any other serve mode first. When
     /// <paramref name="openBrowserWhenReady"/> is set, the agent UI opens in the browser once the server
-    /// passes its first health check — not before. Cli is delegated to <see cref="LaunchCli"/>.
+    /// passes its first health check — not before. When <paramref name="bindAllInterfaces"/> is set the
+    /// server binds to <c>0.0.0.0</c> (LAN-reachable) instead of loopback; MCPHub still probes and opens
+    /// the UI on <c>127.0.0.1</c> regardless. Cli is delegated to <see cref="LaunchCli"/>.
     /// </summary>
-    Task StartServeAsync(AgentRunMode mode, bool openBrowserWhenReady = false, CancellationToken cancellationToken = default);
+    Task StartServeAsync(AgentRunMode mode, bool openBrowserWhenReady = false, bool bindAllInterfaces = false, CancellationToken cancellationToken = default);
 
     /// <summary>Stops the running serve process (if any).</summary>
     Task StopAsync(CancellationToken cancellationToken = default);
@@ -91,7 +93,7 @@ public sealed class AgentProcessHost : IAgentProcessHost
 
     public event Action? StateChanged;
 
-    public async Task StartServeAsync(AgentRunMode mode, bool openBrowserWhenReady = false, CancellationToken cancellationToken = default)
+    public async Task StartServeAsync(AgentRunMode mode, bool openBrowserWhenReady = false, bool bindAllInterfaces = false, CancellationToken cancellationToken = default)
     {
         if (mode == AgentRunMode.Cli)
         {
@@ -132,6 +134,10 @@ public sealed class AgentProcessHost : IAgentProcessHost
         };
         psi.ArgumentList.Add("serve");
         psi.Environment[DaggerAgent.TriggersEnabledEnv] = mode == AgentRunMode.Jobs ? "true" : "false";
+        // Bind all interfaces (LAN-reachable) when asked; otherwise let the agent use its own default
+        // (loopback). Health probe and browser still target 127.0.0.1 either way.
+        if (bindAllInterfaces)
+            psi.Environment["ASPNETCORE_URLS"] = $"http://0.0.0.0:{agent.Port}";
 
         var process = new DiagProcess { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) Append(LogStream.Stdout, e.Data); };
@@ -155,7 +161,8 @@ public sealed class AgentProcessHost : IAgentProcessHost
                 ServingMode = mode;
                 _pendingBrowserOpen = openBrowserWhenReady ? mode : null;
             }
-            AppendInfo($"Started 'dagger serve' ({mode}, pid {process.Id}); waiting for health on :{agent.Port}…");
+            var bindNote = bindAllInterfaces ? " on 0.0.0.0 (all interfaces)" : "";
+            AppendInfo($"Started 'dagger serve' ({mode}, pid {process.Id}){bindNote}; waiting for health on :{agent.Port}…");
         }
         catch (Exception ex)
         {

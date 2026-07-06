@@ -85,4 +85,10 @@ public sealed class MCPHubSettings
 
     /// <summary>Auto-start DaggerAgent in Jobs (serve + poller) mode when MCPHub launches.</summary>
     public bool AutoStartAgentJobs { get; set; }
+
+    /// <summary>
+    /// Bind DaggerAgent's <c>serve</c> to <c>0.0.0.0</c> (all interfaces, LAN-reachable) instead of
+    /// loopback only. MCPHub still health-probes and opens the UI on <c>127.0.0.1</c> either way.
+    /// </summary>
+    public bool AgentServeBindAllInterfaces { get; set; }
 }

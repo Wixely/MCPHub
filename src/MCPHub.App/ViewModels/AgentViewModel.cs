@@ -40,6 +40,9 @@ public sealed partial class AgentViewModel : ViewModelBase
     [ObservableProperty]
     private bool _autoStartJobs;
 
+    [ObservableProperty]
+    private bool _bindAllInterfaces;
+
     public AgentViewModel(IAgentService agent, IAgentProcessHost host, ISettingsStore settings)
     {
         _agent = agent;
@@ -50,6 +53,7 @@ public sealed partial class AgentViewModel : ViewModelBase
         _autoStartCli = s.AutoStartAgentCli;
         _autoStartWeb = s.AutoStartAgentWeb;
         _autoStartJobs = s.AutoStartAgentJobs;
+        _bindAllInterfaces = s.AgentServeBindAllInterfaces;
 
         _host.StateChanged += OnHostStateChanged;
         _ = InitializeAsync();
@@ -101,9 +105,9 @@ public sealed partial class AgentViewModel : ViewModelBase
 
         var s = _settings.Current;
         if (s.AutoStartAgentJobs)
-            await _host.StartServeAsync(AgentRunMode.Jobs);
+            await _host.StartServeAsync(AgentRunMode.Jobs, bindAllInterfaces: s.AgentServeBindAllInterfaces);
         else if (s.AutoStartAgentWeb)
-            await _host.StartServeAsync(AgentRunMode.Web);
+            await _host.StartServeAsync(AgentRunMode.Web, bindAllInterfaces: s.AgentServeBindAllInterfaces);
 
         if (s.AutoStartAgentCli)
             _host.LaunchCli();
@@ -175,18 +179,33 @@ public sealed partial class AgentViewModel : ViewModelBase
     private async Task StartWebAsync()
     {
         StatusMessage = "Starting agent (web) — the UI opens once it's ready…";
-        await _host.StartServeAsync(AgentRunMode.Web, openBrowserWhenReady: true);
+        await _host.StartServeAsync(AgentRunMode.Web, openBrowserWhenReady: true, bindAllInterfaces: BindAllInterfaces);
     }
 
     [RelayCommand]
     private async Task StartJobsAsync()
     {
         StatusMessage = "Starting agent (jobs) — the UI opens once it's ready…";
-        await _host.StartServeAsync(AgentRunMode.Jobs, openBrowserWhenReady: true);
+        await _host.StartServeAsync(AgentRunMode.Jobs, openBrowserWhenReady: true, bindAllInterfaces: BindAllInterfaces);
     }
 
     [RelayCommand]
     private Task StopAsync() => _host.StopAsync();
+
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        var folder = Model.InstallFolder;
+        try
+        {
+            Directory.CreateDirectory(folder);
+            Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to open agent folder '{folder}': {ex.Message}");
+        }
+    }
 
     [RelayCommand]
     private void EditConfig()
@@ -226,6 +245,12 @@ public sealed partial class AgentViewModel : ViewModelBase
         _settings.Current.AutoStartAgentJobs = value;
         if (value)
             AutoStartWeb = false;
+        _ = _settings.SaveAsync();
+    }
+
+    partial void OnBindAllInterfacesChanged(bool value)
+    {
+        _settings.Current.AgentServeBindAllInterfaces = value;
         _ = _settings.SaveAsync();
     }
 
