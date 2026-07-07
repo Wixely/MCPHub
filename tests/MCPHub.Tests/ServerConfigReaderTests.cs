@@ -40,6 +40,30 @@ public class ServerConfigReaderTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void Reads_a_Server_port_nested_under_a_product_section()
+    {
+        var path = WriteTemp("""{ "Playwright": { "Server": { "Transport": "Http", "Port": 5704 } } }""");
+        try { Assert.Equal(5704, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Prefers_the_top_level_Server_over_a_nested_one()
+    {
+        var path = WriteTemp("""{ "Server": { "Port": 5700 }, "Db": { "Server": { "Port": 9999 } } }""");
+        try { Assert.Equal(5700, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Skips_a_string_Server_and_finds_the_nested_listen_config()
+    {
+        var path = WriteTemp("""{ "Sql": { "Server": "db-host", "Listen": { "Server": { "Port": 5712 } } } }""");
+        try { Assert.Equal(5712, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
     private static string WriteTemp(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), "mcphub-cfg-" + Guid.NewGuid().ToString("N") + ".json");

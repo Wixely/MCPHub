@@ -30,11 +30,15 @@ public sealed class ManagedService
     /// <summary>Effective HTTP port (from installed config when known, else the catalog default).</summary>
     public int? Port { get; set; }
 
-    /// <summary>MCP endpoint URL once a port is known, e.g. <c>http://localhost:5710/mcp</c>.</summary>
-    public string? EndpointUrl => Port is { } p ? $"http://localhost:{p}/mcp" : null;
+    /// <summary>
+    /// MCP endpoint URL once a port is known, e.g. <c>http://127.0.0.1:5710/mcp</c>. Uses the IPv4
+    /// loopback literal (not <c>localhost</c>) since the sub-servers bind <c>127.0.0.1</c> — avoids the
+    /// Windows <c>localhost</c>→<c>::1</c> detour that stalls/fails the connection.
+    /// </summary>
+    public string? EndpointUrl => Port is { } p ? $"http://127.0.0.1:{p}/mcp" : null;
 
-    /// <summary>Health endpoint URL once a port is known, e.g. <c>http://localhost:5710/healthz</c>.</summary>
-    public string? HealthUrl => Port is { } p ? $"http://localhost:{p}/healthz" : null;
+    /// <summary>Health endpoint URL once a port is known, e.g. <c>http://127.0.0.1:5710/healthz</c>.</summary>
+    public string? HealthUrl => Port is { } p ? $"http://127.0.0.1:{p}/healthz" : null;
 
     /// <summary>Installed version (from the MCPHub-owned manifest), or <see langword="null"/> if not installed.</summary>
     public string? InstalledVersion { get; set; }
