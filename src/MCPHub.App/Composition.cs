@@ -90,6 +90,7 @@ public static class Composition
         });
         services.AddSingleton<ISlopworksService, SlopworksService>();
         services.AddSingleton<ISlopworksCli, SlopworksCli>();
+        services.AddSingleton<ISlopworksDaggerBridge, SlopworksDaggerBridge>();
 
         // View-models
         services.AddSingleton<MainWindowViewModel>();

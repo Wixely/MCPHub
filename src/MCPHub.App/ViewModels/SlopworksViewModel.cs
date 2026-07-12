@@ -21,6 +21,7 @@ public sealed partial class SlopworksViewModel : ViewModelBase
 {
     private readonly ISlopworksService _service;
     private readonly ISlopworksCli _cli;
+    private readonly ISlopworksDaggerBridge _daggerBridge;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -50,10 +51,15 @@ public sealed partial class SlopworksViewModel : ViewModelBase
     [ObservableProperty]
     private int _port;
 
-    public SlopworksViewModel(ISlopworksService service, ISlopworksCli cli)
+    /// <summary>Whether the "Add to Dagger endpoints" button should be enabled — true iff DaggerAgent is installed.</summary>
+    [ObservableProperty]
+    private bool _daggerAvailable;
+
+    public SlopworksViewModel(ISlopworksService service, ISlopworksCli cli, ISlopworksDaggerBridge daggerBridge)
     {
         _service = service;
         _cli = cli;
+        _daggerBridge = daggerBridge;
         _ = InitializeAsync();
     }
 
@@ -78,6 +84,7 @@ public sealed partial class SlopworksViewModel : ViewModelBase
         try
         {
             await _service.RefreshInstalledAsync();
+            RefreshDaggerAvailability();
             await CheckUpdatesAsync();
             if (Model_.IsInstalled)
                 await RefreshStatusAsync();
@@ -91,6 +98,13 @@ public sealed partial class SlopworksViewModel : ViewModelBase
             SyncFromModel();
         }
     }
+
+    /// <summary>
+    /// Recomputes <see cref="DaggerAvailable"/> from the bridge — cheap file-existence checks on
+    /// the Dagger + Slopworks install folders. Called after any install path completes since
+    /// installing DaggerAgent flips it on and uninstalling flips it off.
+    /// </summary>
+    private void RefreshDaggerAvailability() => DaggerAvailable = _daggerBridge.CanWire;
 
     [RelayCommand]
     private async Task CheckUpdatesAsync()
@@ -144,9 +158,35 @@ public sealed partial class SlopworksViewModel : ViewModelBase
         {
             IsInstalling = false;
             SyncFromModel();
+            RefreshDaggerAvailability();
             if (Model_.IsInstalled)
+            {
                 await RefreshStatusAsync();
+                // Auto-wire the vLLM endpoint into Dagger on Slopworks install if the agent is
+                // already installed. If it isn't, the AgentViewModel's install path will do the
+                // reverse hook once the agent lands.
+                if (_daggerBridge.CanWire)
+                {
+                    var result = await _daggerBridge.WireAsync();
+                    if (!string.IsNullOrWhiteSpace(result.Message))
+                        StatusMessage = result.Message;
+                }
+            }
         }
+    }
+
+    [RelayCommand]
+    private async Task AddDaggerEndpointAsync()
+    {
+        RefreshDaggerAvailability();
+        if (!_daggerBridge.CanWire)
+        {
+            StatusMessage = "DaggerAgent isn't installed — install it from the Agent tab first.";
+            return;
+        }
+        StatusMessage = "Writing Slopworks vLLM endpoint into DaggerAgent's appsettings.json…";
+        var result = await _daggerBridge.WireAsync();
+        StatusMessage = result.Message;
     }
 
     [RelayCommand]

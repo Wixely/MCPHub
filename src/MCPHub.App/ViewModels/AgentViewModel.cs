@@ -9,6 +9,7 @@ using MCPHub.Core.Agent;
 using MCPHub.Core.Models;
 using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
+using MCPHub.Core.Slopworks;
 
 namespace MCPHub.App.ViewModels;
 
@@ -18,6 +19,7 @@ public sealed partial class AgentViewModel : ViewModelBase
     private readonly IAgentService _agent;
     private readonly IAgentProcessHost _host;
     private readonly ISettingsStore _settings;
+    private readonly ISlopworksDaggerBridge _slopworksBridge;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -43,11 +45,12 @@ public sealed partial class AgentViewModel : ViewModelBase
     [ObservableProperty]
     private bool _bindAllInterfaces;
 
-    public AgentViewModel(IAgentService agent, IAgentProcessHost host, ISettingsStore settings)
+    public AgentViewModel(IAgentService agent, IAgentProcessHost host, ISettingsStore settings, ISlopworksDaggerBridge slopworksBridge)
     {
         _agent = agent;
         _host = host;
         _settings = settings;
+        _slopworksBridge = slopworksBridge;
 
         var s = settings.Current;
         _autoStartCli = s.AutoStartAgentCli;
@@ -156,6 +159,16 @@ public sealed partial class AgentViewModel : ViewModelBase
         {
             await _agent.InstallOrUpdateAsync(progress);
             StatusMessage = $"Installed DaggerAgent {Model.InstalledVersion}.";
+
+            // Reverse hook: if Slopworks is already installed, wire its vLLM endpoint into the
+            // freshly-installed DaggerAgent config. This closes the "install order doesn't
+            // matter" loop with the forward hook in SlopworksViewModel.InstallAsync.
+            if (_slopworksBridge.CanWire)
+            {
+                var result = await _slopworksBridge.WireAsync();
+                if (!string.IsNullOrWhiteSpace(result.Message))
+                    StatusMessage = $"Installed DaggerAgent {Model.InstalledVersion}. {result.Message}";
+            }
         }
         catch (GithubAuthException)
         {

@@ -84,6 +84,18 @@
                    Opacity="0.55" FontSize="12" TextWrapping="Wrap"/>
       </StackPanel>
 
+      <!-- DaggerAgent integration -->
+      <StackPanel Spacing="10">
+        <TextBlock Text="DaggerAgent integration" FontWeight="SemiBold"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Add to Dagger endpoints" Command="{Binding AddDaggerEndpointCommand}"
+                  IsEnabled="{Binding DaggerAvailable}"
+                  ToolTip.Tip="Add (or refresh) a vLLM entry in DaggerAgent's appsettings.json Endpoints array using the currently-configured Slopworks model + port. Idempotent per model — click again after changing the model in Slopworks to add another endpoint."/>
+        </StackPanel>
+        <TextBlock Text="Slopworks-managed endpoints are keyed on model, so re-clicking after a model change adds a new entry without touching your existing ones. On install, MCPHub wires this automatically if DaggerAgent is already installed; otherwise it happens the next time DaggerAgent is installed. Disabled when DaggerAgent isn't installed."
+                   Opacity="0.55" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>
