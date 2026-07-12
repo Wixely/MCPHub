@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Models;
 using MCPHub.Core.Services.Github;
+using MCPHub.Core.Settings;
 using MCPHub.Core.Slopworks;
 
 namespace MCPHub.App.ViewModels;
@@ -22,6 +23,7 @@ public sealed partial class SlopworksViewModel : ViewModelBase
     private readonly ISlopworksService _service;
     private readonly ISlopworksCli _cli;
     private readonly ISlopworksDaggerBridge _daggerBridge;
+    private readonly ISettingsStore _settings;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -55,11 +57,17 @@ public sealed partial class SlopworksViewModel : ViewModelBase
     [ObservableProperty]
     private bool _daggerAvailable;
 
-    public SlopworksViewModel(ISlopworksService service, ISlopworksCli cli, ISlopworksDaggerBridge daggerBridge)
+    /// <summary>Auto-start the vLLM server when MCPHub launches (persisted).</summary>
+    [ObservableProperty]
+    private bool _autoStartServer;
+
+    public SlopworksViewModel(ISlopworksService service, ISlopworksCli cli, ISlopworksDaggerBridge daggerBridge, ISettingsStore settings)
     {
         _service = service;
         _cli = cli;
         _daggerBridge = daggerBridge;
+        _settings = settings;
+        _autoStartServer = settings.Current.AutoStartSlopworks;
         _ = InitializeAsync();
     }
 
@@ -85,6 +93,8 @@ public sealed partial class SlopworksViewModel : ViewModelBase
         {
             await _service.RefreshInstalledAsync();
             RefreshDaggerAvailability();
+            if (Model_.IsInstalled && _settings.Current.AutoStartSlopworks)
+                await AutoStartAsync();
             await CheckUpdatesAsync();
             if (Model_.IsInstalled)
                 await RefreshStatusAsync();
@@ -253,6 +263,44 @@ public sealed partial class SlopworksViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Fires <c>Slopworks.App.exe start</c> on launch when auto-start is enabled. <c>podman run -d</c>
+    /// is detached, so this returns once the container is scheduled — not after the model loads.
+    /// </summary>
+    private async Task AutoStartAsync()
+    {
+        StatusMessage = "Auto-starting vLLM (first pull can take a while — see the Logs tab)…";
+        try
+        {
+            var exit = await _cli.StartAsync();
+            if (exit != 0)
+                StatusMessage = $"Auto-start exited with code {exit}. See the Logs tab.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Auto-start failed: " + ex.Message;
+        }
+    }
+
+    /// <summary>Launches the Slopworks desktop app (GUI, no CLI args) as an independent process.</summary>
+    [RelayCommand]
+    private void LaunchApp()
+    {
+        if (!Model_.IsInstalled) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(Model_.ExecutablePath)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Model_.InstallFolder,
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Couldn't launch Slopworks: " + ex.Message;
+        }
+    }
+
     [RelayCommand]
     private void OpenFolder()
     {
@@ -282,6 +330,12 @@ public sealed partial class SlopworksViewModel : ViewModelBase
     partial void OnStatusMessageChanged(string? value) => OnPropertyChanged(nameof(HasStatus));
     partial void OnApiHealthyChanged(bool value) => OnPropertyChanged(nameof(ApiHealthText));
     partial void OnPortChanged(int value) => OnPropertyChanged(nameof(PortText));
+
+    partial void OnAutoStartServerChanged(bool value)
+    {
+        _settings.Current.AutoStartSlopworks = value;
+        _ = _settings.SaveAsync();
+    }
 
     private void SyncFromModel()
     {

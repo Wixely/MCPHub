@@ -19,6 +19,25 @@
 
   <Application.Styles>
     <FluentTheme />
+
+    <!-- Green "launch" button: solid green while enabled, greys out to the card colour when
+         disabled (e.g. the product isn't installed). Applied via Classes="launch". -->
+    <Style Selector="Button.launch">
+      <Setter Property="Background" Value="#2EA043"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.launch:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3FB950"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.launch:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#238636"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.launch:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#14000000"/>
+      <Setter Property="Foreground" Value="#80FFFFFF"/>
+    </Style>
   </Application.Styles>
 
   <TrayIcon.Icons>

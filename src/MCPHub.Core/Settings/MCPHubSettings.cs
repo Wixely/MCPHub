@@ -94,4 +94,7 @@ public sealed class MCPHubSettings
     /// loopback only. MCPHub still health-probes and opens the UI on <c>127.0.0.1</c> either way.
     /// </summary>
     public bool AgentServeBindAllInterfaces { get; set; }
+
+    /// <summary>Auto-start the Slopworks vLLM server (<c>Slopworks.App.exe start</c>) when MCPHub launches.</summary>
+    public bool AutoStartSlopworks { get; set; }
 }

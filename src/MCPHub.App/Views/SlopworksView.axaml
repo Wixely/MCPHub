@@ -73,6 +73,9 @@
       <StackPanel Spacing="10">
         <TextBlock Text="Server" FontWeight="SemiBold"/>
         <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Open Slopworks" Classes="launch" Command="{Binding LaunchAppCommand}"
+                  IsEnabled="{Binding IsInstalled}"
+                  ToolTip.Tip="Launch the Slopworks desktop app (installed) in its own window."/>
           <Button Content="Start" Command="{Binding StartCommand}" IsEnabled="{Binding IsInstalled}"
                   ToolTip.Tip="Run 'Slopworks.App.exe start' — starts the vLLM container. First pull may take a while."/>
           <Button Content="Stop" Command="{Binding StopCommand}" IsEnabled="{Binding IsInstalled}"
@@ -80,7 +83,11 @@
           <Button Content="Open in Explorer" Command="{Binding OpenFolderCommand}"
                   ToolTip.Tip="Open the folder Slopworks is installed in"/>
         </StackPanel>
+        <CheckBox Content="Auto-start the vLLM server when MCPHub launches" IsChecked="{Binding AutoStartServer}"
+                  ToolTip.Tip="Runs 'Slopworks.App.exe start' on launch (if installed). The first model pull can take a while — watch the Logs tab."/>
         <TextBlock Text="Start / Stop shell out to the Slopworks CLI. Output streams into the Logs tab (as &quot;Slopworks&quot;). Slopworks itself keeps its config under %AppData% — MCPHub only manages the binary."
+                   Opacity="0.55" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="To expose the vLLM API on 0.0.0.0 (LAN-reachable), enable network exposure inside the Slopworks app — it sets up a firewall rule + port proxy and needs elevation, so MCPHub can't drive it from the CLI."
                    Opacity="0.55" FontSize="12" TextWrapping="Wrap"/>
       </StackPanel>
 

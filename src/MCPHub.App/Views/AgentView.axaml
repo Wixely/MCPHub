@@ -58,7 +58,7 @@
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Button Content="Open CLI" Command="{Binding StartCliCommand}" IsEnabled="{Binding IsInstalled}"
                   ToolTip.Tip="Launch the interactive REPL in its own console window (independent of MCPHub)"/>
-          <Button Content="Web" Command="{Binding StartWebCommand}" IsEnabled="{Binding IsInstalled}"
+          <Button Content="Web" Classes="launch" Command="{Binding StartWebCommand}" IsEnabled="{Binding IsInstalled}"
                   ToolTip.Tip="Run 'dagger serve' and open the agent web UI in your browser"/>
           <Button Content="Jobs" Command="{Binding StartJobsCommand}" IsEnabled="{Binding IsInstalled}"
                   ToolTip.Tip="Run 'dagger serve' with the ticket poller enabled, and open the jobs UI"/>

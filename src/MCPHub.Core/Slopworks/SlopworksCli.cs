@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
+using MCPHub.Core.Process;
 using Microsoft.Extensions.Logging;
 using DiagProcess = System.Diagnostics.Process;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
@@ -11,8 +12,9 @@ namespace MCPHub.Core.Slopworks;
 /// <summary>
 /// Invokes Slopworks's headless CLI (<c>Slopworks.App.exe start/stop/status</c>) as one-shot
 /// subprocesses. Unlike <see cref="Agent.AgentProcessHost"/>, we don't keep a long-lived child around
-/// — Slopworks itself owns the vLLM container lifecycle; MCPHub just fires commands and observes
-/// via <c>status --json</c>.
+/// — Slopworks itself owns the vLLM container lifecycle; MCPHub fires commands and observes via
+/// <c>status --json</c> for container state, then re-probes the vLLM API directly (see
+/// <c>GetStatusAsync</c>) for the health flag.
 /// </summary>
 public interface ISlopworksCli
 {
@@ -20,9 +22,10 @@ public interface ISlopworksCli
     ManagedService Slopworks { get; }
 
     /// <summary>
-    /// Runs <c>Slopworks.App.exe status --json</c> and parses the reply. Returns
-    /// <see cref="SlopworksStatus.Unknown"/> if the binary isn't installed, the invocation errors,
-    /// or the output doesn't parse. Never throws.
+    /// Runs <c>Slopworks.App.exe status --json</c> for container state, then overrides
+    /// <see cref="SlopworksStatus.ApiHealthy"/> with a direct <c>GET /v1/models</c> probe on
+    /// <c>127.0.0.1</c> (see <c>ProbeApiHealthyAsync</c>). Returns <see cref="SlopworksStatus.Unknown"/>
+    /// if the binary isn't installed, the invocation errors, or the output doesn't parse. Never throws.
     /// </summary>
     Task<SlopworksStatus> GetStatusAsync(CancellationToken cancellationToken = default);
 
@@ -44,12 +47,14 @@ public sealed class SlopworksCli : ISlopworksCli
 {
     private readonly SlopworksContext _context;
     private readonly ILogStore _logStore;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<SlopworksCli> _logger;
 
-    public SlopworksCli(SlopworksContext context, ILogStore logStore, ILogger<SlopworksCli> logger)
+    public SlopworksCli(SlopworksContext context, ILogStore logStore, IHttpClientFactory httpClientFactory, ILogger<SlopworksCli> logger)
     {
         _context = context;
         _logStore = logStore;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -69,8 +74,15 @@ public sealed class SlopworksCli : ISlopworksCli
             if (line.Length == 0)
                 return SlopworksStatus.Unknown;
 
-            return JsonSerializer.Deserialize(line, StatusJsonContext.Default.SlopworksStatus)
+            var parsed = JsonSerializer.Deserialize(line, StatusJsonContext.Default.SlopworksStatus)
                 ?? SlopworksStatus.Unknown;
+
+            // The CLI derives `apiHealthy` by probing `http://localhost:{port}/v1/models`, but on
+            // Windows `localhost` can resolve to IPv6 (::1) and miss the IPv4-only WSL portproxy,
+            // reporting "not responding" for a server that's actually up. Re-probe the same route
+            // ourselves on 127.0.0.1 so the status reflects what an OpenAI client would really hit.
+            var apiHealthy = await ProbeApiHealthyAsync(parsed.Port, cancellationToken).ConfigureAwait(false);
+            return parsed with { ApiHealthy = apiHealthy };
         }
         catch (JsonException ex)
         {
@@ -81,6 +93,30 @@ public sealed class SlopworksCli : ISlopworksCli
         {
             _logger.LogWarning(ex, "Slopworks status invocation failed.");
             return SlopworksStatus.Unknown;
+        }
+    }
+
+    /// <summary>
+    /// Live health probe: <c>GET http://127.0.0.1:{port}/v1/models</c> with the short-timeout
+    /// "health" client. Any non-success status, connection failure, or timeout counts as unhealthy.
+    /// Returns false immediately when the port is unknown (server never started / status unparsed).
+    /// </summary>
+    private async Task<bool> ProbeApiHealthyAsync(int port, CancellationToken ct)
+    {
+        if (port <= 0)
+            return false;
+
+        try
+        {
+            var http = _httpClientFactory.CreateClient(ServiceProcessHost.HealthClientName);
+            using var response = await http.GetAsync($"http://127.0.0.1:{port}/v1/models", ct).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            // Connection refused / reset / timeout — the API isn't answering. Not worth a warning;
+            // "not responding" is a normal state while the container spins up or the model loads.
+            return false;
         }
     }
 

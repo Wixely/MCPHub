@@ -27,7 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase
         [
             new NavItem("Services", services),
             new NavItem("Agent", agent),
-            new NavItem("Slopworks", slopworks),
+            new NavItem("Engine", slopworks),
             _logsNav,
             new NavItem("Proxy", proxy),
             new NavItem("Diagnostics", diagnostics),
