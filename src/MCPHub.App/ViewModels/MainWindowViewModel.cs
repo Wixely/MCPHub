@@ -18,7 +18,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavItem> NavItems { get; }
 
-    public MainWindowViewModel(ServicesViewModel services, AgentViewModel agent, LogsViewModel logs, ProxyViewModel proxy, DiagnosticsViewModel diagnostics, SettingsViewModel settings)
+    public MainWindowViewModel(ServicesViewModel services, AgentViewModel agent, SlopworksViewModel slopworks, LogsViewModel logs, ProxyViewModel proxy, DiagnosticsViewModel diagnostics, SettingsViewModel settings)
     {
         _logs = logs;
         _logsNav = new NavItem("Logs", logs);
@@ -27,6 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase
         [
             new NavItem("Services", services),
             new NavItem("Agent", agent),
+            new NavItem("Slopworks", slopworks),
             _logsNav,
             new NavItem("Proxy", proxy),
             new NavItem("Diagnostics", diagnostics),

@@ -77,6 +77,9 @@ public sealed class MCPHubSettings
     /// <summary>Dedicated folder DaggerAgent is installed into; <see langword="null"/> = default (<c>{Data}/agent</c>).</summary>
     public string? AgentFolder { get; set; }
 
+    /// <summary>Dedicated folder Slopworks is installed into; <see langword="null"/> = default (<c>{Data}/slopworks</c>).</summary>
+    public string? SlopworksFolder { get; set; }
+
     /// <summary>Auto-start DaggerAgent's interactive CLI (REPL) when MCPHub launches.</summary>
     public bool AutoStartAgentCli { get; set; }
 

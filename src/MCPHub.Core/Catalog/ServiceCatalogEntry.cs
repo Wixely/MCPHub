@@ -30,6 +30,12 @@ namespace MCPHub.Core.Catalog;
 /// Config file name when it isn't <c>{Name}.json</c> (e.g. <c>"appsettings.json"</c>); <see langword="null"/>
 /// falls back to <c>{Name}.json</c>.
 /// </param>
+/// <param name="AssetFileNameOverride">
+/// Callback for products whose GitHub release asset names don't follow the MCPSharp default
+/// (<c>{Name}-{os}-x64-{flavor}-v{ver}.zip</c>) — e.g. <c>Slopworks</c> uses
+/// <c>Slopworks-v{ver}-{os}-x64.zip</c> and drops the flavour token entirely. Args are
+/// <c>(osToken, flavorToken, versionTag)</c>; <see langword="null"/> falls back to the default.
+/// </param>
 public sealed record ServiceCatalogEntry(
     string Name,
     string RepoOwner,
@@ -39,7 +45,8 @@ public sealed record ServiceCatalogEntry(
     int? DefaultPort,
     string EnvPrefix,
     string? ExecutableBaseName = null,
-    string? ConfigFileNameOverride = null)
+    string? ConfigFileNameOverride = null,
+    Func<string, string, string, string>? AssetFileNameOverride = null)
 {
     /// <summary>
     /// Config file name read next to the executable, e.g. <c>NoteworthyMCPSharp.json</c> — or
@@ -80,5 +87,6 @@ public sealed record ServiceCatalogEntry(
     /// <c>NoteworthyMCPSharp-win-x64-self-contained-v1.0.2.zip</c>.
     /// </summary>
     public string AssetFileName(string osToken, string flavorToken, string versionTag)
-        => $"{Name}-{osToken}-x64-{flavorToken}-v{versionTag.TrimStart('v')}.zip";
+        => AssetFileNameOverride?.Invoke(osToken, flavorToken, versionTag)
+           ?? $"{Name}-{osToken}-x64-{flavorToken}-v{versionTag.TrimStart('v')}.zip";
 }

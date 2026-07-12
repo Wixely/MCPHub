@@ -4,6 +4,7 @@ using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
 using MCPHub.AppHost;
 using MCPHub.Core.Agent;
+using MCPHub.Core.Slopworks;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
@@ -76,10 +77,25 @@ public static class Composition
         services.AddSingleton<IAgentProcessHost, AgentProcessHost>();
         services.AddSingleton<IAgentService, AgentService>();
 
+        // Slopworks — vLLM setup/management tool (not an MCP server). MCPHub installs the binary
+        // from GitHub releases and shells out to its CLI for start / stop / status.
+        services.AddSingleton(sp =>
+        {
+            var paths = sp.GetRequiredService<IAppPaths>();
+            var settings = sp.GetRequiredService<ISettingsStore>();
+            var folder = string.IsNullOrWhiteSpace(settings.Current.SlopworksFolder)
+                ? Path.Combine(paths.DataDirectory, "slopworks")
+                : settings.Current.SlopworksFolder!;
+            return new SlopworksContext(new ManagedService(Slopworks.Catalog, folder));
+        });
+        services.AddSingleton<ISlopworksService, SlopworksService>();
+        services.AddSingleton<ISlopworksCli, SlopworksCli>();
+
         // View-models
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
         services.AddSingleton<AgentViewModel>();
+        services.AddSingleton<SlopworksViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
