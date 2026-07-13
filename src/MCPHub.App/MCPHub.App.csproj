@@ -7,7 +7,7 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>Assets/mcphub.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
