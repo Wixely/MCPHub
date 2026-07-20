@@ -13,15 +13,13 @@
     <TextBlock DockPanel.Dock="Top" Text="Service Output" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12"/>
 
     <!-- Toolbar -->
-    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="220,*,Auto,Auto,Auto,Auto">
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="220,*,Auto,Auto,Auto">
       <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
                 ItemsSource="{Binding ServiceNames}" SelectedItem="{Binding SelectedService}"/>
       <TextBox Grid.Column="1" Watermark="Filter…" Text="{Binding FilterText}" Margin="12,0"/>
-      <CheckBox Grid.Column="2" Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
-                VerticalAlignment="Center" Margin="0,0,10,0"/>
-      <Button Grid.Column="3" Content="Clear" Command="{Binding ClearCommand}" Margin="0,0,6,0"/>
-      <Button Grid.Column="4" Content="Copy" Click="OnCopy" Margin="0,0,6,0"/>
-      <Button Grid.Column="5" Content="Save" Click="OnSave"/>
+      <Button Grid.Column="2" Content="Clear" Command="{Binding ClearCommand}" Margin="0,0,6,0"/>
+      <Button Grid.Column="3" Content="Copy" Click="OnCopy" Margin="0,0,6,0"/>
+      <Button Grid.Column="4" Content="Save" Click="OnSave"/>
     </Grid>
 
     <!-- Log lines -->

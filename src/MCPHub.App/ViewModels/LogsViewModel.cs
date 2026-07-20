@@ -18,9 +18,6 @@ public sealed partial class LogsViewModel : ViewModelBase
     private string? _selectedService;
 
     [ObservableProperty]
-    private bool _autoScroll = true;
-
-    [ObservableProperty]
     private string _filterText = string.Empty;
 
     public ObservableCollection<string> ServiceNames { get; }

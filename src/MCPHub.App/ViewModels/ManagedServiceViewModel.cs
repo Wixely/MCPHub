@@ -154,12 +154,18 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         if (IsInstalling)
             return;
 
+        // The install stops a running instance to unlock its executable — capture that here so we can
+        // bring it back up afterwards.
+        var wasRunning = _processHost.IsRunning(Name);
+
         IsInstalling = true;
         InstallProgress = 0;
         var progress = new Progress<double>(p => InstallProgress = p);
+        var installed = false;
         try
         {
             await _manager.InstallOrUpdateAsync(_model, progress);
+            installed = true;
         }
         catch
         {
@@ -168,6 +174,15 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         finally
         {
             IsInstalling = false;
+            SyncFromModel();
+        }
+
+        // After a successful (re)install, restart the service if it was running before the update or is
+        // flagged auto-run — otherwise an updated service sits Stopped and never returns to
+        // Starting → Running (the "it never goes yellow again" symptom).
+        if (installed && (wasRunning || AutoRun) && CanStart)
+        {
+            await _processHost.StartAsync(_model);
             SyncFromModel();
         }
     }
