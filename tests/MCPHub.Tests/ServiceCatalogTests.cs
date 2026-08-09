@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_fourteen_products()
+    public void Catalog_contains_all_sixteen_products()
     {
-        Assert.Equal(14, ServiceCatalog.All.Count);
+        Assert.Equal(16, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -24,6 +24,8 @@ public class ServiceCatalogTests
     [InlineData("GithubMCPSharp", 5701)]
     [InlineData("RemoteAdminMCPSharp", 5706)]
     [InlineData("RedisMCPSharp", 5713)]
+    [InlineData("MailCalMCPSharp", 5708)]
+    [InlineData("ComfyUIMCPSharp", 5715)]
     public void Known_default_ports_are_recorded(string name, int expectedPort)
     {
         var entry = ServiceCatalog.FindByName(name);
@@ -44,6 +46,14 @@ public class ServiceCatalogTests
         var entry = ServiceCatalog.FindByName("PlaywrightMCPSharp")!;
         var asset = entry.AssetFileName("win", "self-contained", "v1.1.6");
         Assert.Equal("PlaywrightMCPSharp-win-x64-self-contained-v1.1.6.zip", asset);
+    }
+
+    [Theory]
+    [InlineData("MailCalMCPSharp", "mailcal")]
+    [InlineData("ComfyUIMCPSharp", "comfyui")]
+    public void Proxy_key_is_the_product_name_minus_the_mcpsharp_suffix(string name, string expectedKey)
+    {
+        Assert.Equal(expectedKey, ServiceCatalog.FindByName(name)!.Key);
     }
 
     [Fact]

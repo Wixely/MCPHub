@@ -1,13 +1,14 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 14 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 16 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
 /// Most products live in a repo named after the product. The exception is <c>RepoDetoxMCPSharp</c>,
 /// whose HTTP MCP server ships inside the multi-app <c>RepoDetox</c> repo (alongside a CLI and GUI),
 /// so its <c>RepoName</c> differs from its <c>Name</c> and it is published self-contained only.
-/// Ports for Noteworthy (5710), SQL (5712), Redis (5713), GitHub (5701) and RemoteAdmin (5706) are confirmed; the rest are
+/// Ports for GitHub (5701), RemoteAdmin (5706), MailCal (5708), Noteworthy (5710), SQL (5712),
+/// Redis (5713) and ComfyUI (5715) are confirmed; the rest are
 /// <see langword="null"/> and resolved from each installed <c>{Name}.json</c> at runtime
 /// rather than hard-coded. Env-var prefixes follow the observed pattern (product name minus the
 /// trailing "Sharp", upper-cased, plus "_") and are verified against the installed config later.
@@ -41,6 +42,9 @@ public static class ServiceCatalog
         new("PaperlessNgxMCPSharp", "Wixely", "PaperlessNgxMCPSharp",
             "Paperless-ngx", "Paperless-ngx document store MCP server", null, "PAPERLESSNGXMCP_"),
 
+        new("MailCalMCPSharp", "Wixely", "MailCalMCPSharp",
+            "Mail & Calendar", "Email & calendar (Outlook, Gmail, IMAP) MCP server", 5708, "MAILCALMCP_"),
+
         new("ProxmoxMCPSharp", "Wixely", "ProxmoxMCPSharp",
             "Proxmox", "Proxmox VE virtualization MCP server", null, "PROXMOXMCP_"),
 
@@ -55,6 +59,9 @@ public static class ServiceCatalog
 
         new("PlaywrightMCPSharp", "Wixely", "PlaywrightMCPSharp",
             "Playwright", "Playwright browser automation MCP server", null, "PLAYWRIGHTMCP_"),
+
+        new("ComfyUIMCPSharp", "Wixely", "ComfyUIMCPSharp",
+            "ComfyUI", "ComfyUI image generation (queue, live progress, images) MCP server", 5715, "COMFYUIMCP_"),
 
         // Non-standard: RepoDetoxMCPSharp is one of three apps (CLI, GUI, MCP) shipped from the
         // "RepoDetox" repo, so RepoName ≠ Name. Published self-contained only; port read from config.
