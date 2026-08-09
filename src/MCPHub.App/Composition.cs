@@ -101,6 +101,7 @@ public static class Composition
         services.AddSingleton<ProxyViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<UpdatesViewModel>();
     }
 
     private static void ConfigureGithubClient(HttpClient client)

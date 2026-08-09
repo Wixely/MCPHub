@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
+             x:Class="MCPHub.App.Views.UpdatesView"
+             x:DataType="vm:UpdatesViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="24" Spacing="18" MaxWidth="740" HorizontalAlignment="Left">
+
+      <StackPanel Spacing="2">
+        <TextBlock Text="Updates" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="Compares this build against the newest MCPHub release. Downloading and swapping in the new build is manual."
+                   Opacity="0.65" TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <Border Background="#14000000" CornerRadius="6" Padding="16">
+        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="Installed" Opacity="0.65" Margin="0,0,0,8"/>
+          <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CurrentVersion}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="Latest" Opacity="0.65" Margin="0,0,0,8"/>
+          <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center"
+                    Background="{Binding Status, Converter={StaticResource UpdateStatusToBrush}}"/>
+            <TextBlock Text="{Binding LatestVersion}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusText}" Opacity="0.65" VerticalAlignment="Center"/>
+          </StackPanel>
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Text="Published" Opacity="0.65" Margin="0,0,0,8"
+                     IsVisible="{Binding HasPublished}"/>
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PublishedText}" Margin="0,0,0,8"
+                     IsVisible="{Binding HasPublished}"/>
+
+          <TextBlock Grid.Row="3" Grid.Column="0" Text="Download" Opacity="0.65" Margin="0,0,0,8"
+                     IsVisible="{Binding HasDownloadHint}"/>
+          <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DownloadHint}" Margin="0,0,0,8"
+                     TextWrapping="Wrap" IsVisible="{Binding HasDownloadHint}"/>
+
+          <TextBlock Grid.Row="4" Grid.Column="0" Text="Repository" Opacity="0.65"/>
+          <HyperlinkButton Grid.Row="4" Grid.Column="1" Content="{Binding RepositoryUrl}"
+                           NavigateUri="{Binding RepositoryUrl}" Padding="0"
+                           HorizontalAlignment="Left"/>
+        </Grid>
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <Button Content="Check for updates" Command="{Binding CheckCommand}" IsEnabled="{Binding !IsChecking}"/>
+        <Button Content="Open release page" Command="{Binding OpenReleasePageCommand}"/>
+        <ProgressBar IsIndeterminate="True" Width="120" Height="4" VerticalAlignment="Center"
+                     IsVisible="{Binding IsChecking}"/>
+      </StackPanel>
+
+      <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" TextWrapping="Wrap"/>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
