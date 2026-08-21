@@ -77,6 +77,9 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         SyncFromModel();
     }
 
+    /// <summary>Whether this service matches the services-list search box. See ServiceCatalogEntry.</summary>
+    public bool MatchesSearch(string? term) => _model.Catalog.MatchesSearch(term);
+
     public string Name => _model.Catalog.Name;
     public string DisplayName => _model.Catalog.DisplayName;
     public string Description => _model.Catalog.Description;
