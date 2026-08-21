@@ -81,8 +81,18 @@ public sealed class ServiceProcessHost : IServiceProcessHost
             return Task.CompletedTask;
         }
 
-        // Follow the server's own config for the effective port; fall back to the catalog default.
+        // The server's own config is the source of truth for its port; DefaultPort is a last resort
+        // that is null for every MCPSharp product.
         service.Port = ServerConfigReader.ReadPort(service.ConfigPath) ?? service.Catalog.DefaultPort;
+
+        // Without a port there is no health URL, so the service would sit at Starting forever and the
+        // proxy would never register it. Say so plainly instead of leaving it a mystery.
+        if (service.Port is null)
+        {
+            AppendInfo(service,
+                $"Could not read Server.Port from {service.Catalog.ConfigFileName}. " +
+                "Health checks and proxy registration need it — check the file is present and valid JSON.");
+        }
 
         var process = new DiagProcess
         {
