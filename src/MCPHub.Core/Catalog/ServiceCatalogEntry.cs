@@ -57,6 +57,22 @@ public sealed record ServiceCatalogEntry(
     public string ConfigFileName => ConfigFileNameOverride ?? $"{Name}.json";
 
     /// <summary>
+    /// Additional config files this product reads beside <see cref="ConfigFileName"/>, in the order
+    /// they should appear in the UI. Empty for most products.
+    ///
+    /// These typically ship only as <c>.example.json</c> templates so an update cannot overwrite
+    /// real data — see <see cref="ConfigFileResolver"/>, which promotes the template on first open.
+    /// </summary>
+    public IReadOnlyList<string> ExtraConfigFileNames { get; init; } = [];
+
+    /// <summary>Primary config plus any extras, in display order.</summary>
+    public IReadOnlyList<string> AllConfigFileNames =>
+        [ConfigFileName, .. ExtraConfigFileNames];
+
+    /// <summary>True when this product reads more than one config file.</summary>
+    public bool HasExtraConfigFiles => ExtraConfigFileNames.Count > 0;
+
+    /// <summary>
     /// Short lowercase slug used to namespace this server's tools in the proxy (product name minus the
     /// trailing "MCPSharp"), e.g. <c>noteworthy</c> for <c>NoteworthyMCPSharp</c>.
     /// </summary>
