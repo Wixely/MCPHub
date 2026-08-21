@@ -88,8 +88,30 @@
                     <Button Content="{Binding InstallButtonText}" Width="84" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding InstallCommand}"/>
                     <Button Content="Start" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
                     <Button Content="Stop" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
-                    <Button Content="Config" Width="64" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding EditConfigCommand}"
+                    <!-- Single-config services: opens {Name}.json directly. -->
+                    <Button Content="Config" Width="64" HorizontalContentAlignment="Center" Padding="8,4"
+                            IsVisible="{Binding !HasExtraConfigs}"
+                            Command="{Binding EditConfigCommand}"
                             IsEnabled="{Binding CanEditConfig}" ToolTip.Tip="{Binding ConfigFileName}"/>
+
+                    <!-- Multi-config services (e.g. Remote Admin): pick which file to open. -->
+                    <Button Content="Config ⌄" Width="64" HorizontalContentAlignment="Center" Padding="8,4"
+                            IsVisible="{Binding HasExtraConfigs}"
+                            IsEnabled="{Binding CanOpenConfigMenu}"
+                            ToolTip.Tip="This service reads several config files">
+                      <Button.Flyout>
+                        <MenuFlyout ItemsSource="{Binding ConfigFiles}">
+                          <MenuFlyout.ItemContainerTheme>
+                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                          x:DataType="vm:ConfigFileViewModel">
+                              <Setter Property="Header" Value="{Binding DisplayName}"/>
+                              <Setter Property="Command" Value="{Binding OpenCommand}"/>
+                              <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}"/>
+                            </ControlTheme>
+                          </MenuFlyout.ItemContainerTheme>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
                     <Button Content="Logs" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding ViewLogsCommand}"/>
                   </StackPanel>
                   <ProgressBar IsVisible="{Binding IsInstalling}" Minimum="0" Maximum="1"

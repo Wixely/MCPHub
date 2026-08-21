@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using MCPHub.App.Messages;
+using MCPHub.Core.Catalog;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
@@ -41,6 +44,7 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         _processHost = processHost;
         _settings = settings;
         _autoRun = settings.Current.AutoStartServices.Contains(Name);
+        BuildConfigFiles();
     }
 
     /// <summary>Persists the auto-run choice whenever the checkbox is toggled.</summary>
@@ -91,11 +95,39 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         ? "Install"
         : _model.UpdateStatus == UpdateStatus.UpdateAvailable ? "Update" : "Reinstall";
 
-    /// <summary>The config file edited by <see cref="EditConfigCommand"/>, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
+    /// <summary>The service's own config file, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
     public string ConfigFileName => _model.Catalog.ConfigFileName;
 
     /// <summary>Whether a config file exists to edit (it ships with the install).</summary>
     public bool CanEditConfig => File.Exists(_model.ConfigPath);
+
+    /// <summary>True when this service reads more than one config file, so the button gets a menu.</summary>
+    public bool HasExtraConfigs => _model.Catalog.HasExtraConfigFiles;
+
+    /// <summary>The dropdown is available as soon as the service is installed — an extra config
+    /// file that does not exist yet is created from its template when picked.</summary>
+    public bool CanOpenConfigMenu => _model.IsInstalled;
+
+    /// <summary>Every config file for this service, primary first. Empty unless <see cref="HasExtraConfigs"/>.</summary>
+    public IReadOnlyList<ConfigFileViewModel> ConfigFiles { get; private set; } = [];
+
+    private void BuildConfigFiles()
+    {
+        var catalog = _model.Catalog;
+        if (!catalog.HasExtraConfigFiles)
+        {
+            ConfigFiles = [];
+            return;
+        }
+
+        ConfigFiles = catalog.AllConfigFileNames
+            .Select(f => new ConfigFileViewModel(
+                f,
+                ConfigFileResolver.DescribeFileName(f, catalog.Name),
+                isPrimary: string.Equals(f, catalog.ConfigFileName, StringComparison.OrdinalIgnoreCase),
+                OpenConfigFile))
+            .ToList();
+    }
 
     /// <summary>Checks GitHub for this service's latest release and refreshes the row.</summary>
     [RelayCommand]
@@ -187,22 +219,35 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Opens this service's <c>{Name}.json</c> config in the OS default editor.</summary>
+    /// <summary>Opens this service's own <c>{Name}.json</c> config in the OS default editor.</summary>
     [RelayCommand]
-    private void EditConfig()
+    private void EditConfig() => OpenConfigFile(_model.Catalog.ConfigFileName);
+
+    /// <summary>
+    /// Opens one of this service's config files, creating it from its shipped <c>.example</c>
+    /// template if this is the first time it has been asked for.
+    /// </summary>
+    private void OpenConfigFile(string fileName)
     {
-        var path = _model.ConfigPath;
-        if (!File.Exists(path))
+        var resolution = ConfigFileResolver.Resolve(_model.InstallFolder, fileName);
+        if (!resolution.Exists || resolution.Path is null)
+        {
+            Debug.WriteLine($"No config file or template for '{fileName}' in '{_model.InstallFolder}'.");
             return;
+        }
 
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(resolution.Path) { UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open config '{path}': {ex.Message}");
+            Debug.WriteLine($"Failed to open config '{resolution.Path}': {ex.Message}");
         }
+
+        // A promoted template is a new file on disk, so the primary-config check may have flipped.
+        if (resolution.Outcome == ConfigFileOutcome.CreatedFromExample)
+            OnPropertyChanged(nameof(CanEditConfig));
     }
 
     /// <summary>Switches to the Logs page focused on this service.</summary>
@@ -223,5 +268,6 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStop));
         OnPropertyChanged(nameof(InstallButtonText));
         OnPropertyChanged(nameof(CanEditConfig));
+        OnPropertyChanged(nameof(CanOpenConfigMenu));
     }
 }
