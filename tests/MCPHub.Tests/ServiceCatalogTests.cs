@@ -18,34 +18,18 @@ public class ServiceCatalogTests
         Assert.Equal(ServiceCatalog.All.Count, distinct.Count());
     }
 
-    [Theory]
-    [InlineData("GithubMCPSharp", 5701)]
-    [InlineData("RemoteAdminMCPSharp", 5706)]
-    [InlineData("NoteworthyMCPSharp", 5711)]
-    [InlineData("SQLMCPSharp", 5712)]
-    [InlineData("RedisMCPSharp", 5713)]
-    [InlineData("ComfyUIMCPSharp", 5715)]
-    [InlineData("PortainerMCPSharp", 5716)]
-    [InlineData("MailCalMCPSharp", 5717)]
-    public void Known_default_ports_are_recorded(string name, int expectedPort)
-    {
-        var entry = ServiceCatalog.FindByName(name);
-        Assert.NotNull(entry);
-        Assert.Equal(expectedPort, entry!.DefaultPort);
-    }
-
     [Fact]
-    public void Default_ports_do_not_collide()
+    public void No_product_hard_codes_a_port()
     {
-        // DefaultPort is only a fallback for when a service's config cannot be read, but two
-        // products sharing one fallback is exactly the situation that made MailCal and
-        // Paperless-ngx unable to run side by side.
-        var ports = ServiceCatalog.All
+        // Ports live in each server's own {Name}.json and are read by ServerConfigReader. A copy
+        // here would be a second source of truth for a value this repo does not own — which is
+        // exactly how MailCal (moved to 5717) and Noteworthy (always 5711) ended up wrong.
+        var hardCoded = ServiceCatalog.All
             .Where(e => e.DefaultPort is not null)
-            .Select(e => e.DefaultPort!.Value)
+            .Select(e => $"{e.Name}={e.DefaultPort}")
             .ToList();
 
-        Assert.Equal(ports.Count, ports.Distinct().Count());
+        Assert.Empty(hardCoded);
     }
 
     [Fact]
