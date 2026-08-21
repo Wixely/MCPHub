@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_sixteen_products()
+    public void Catalog_contains_all_seventeen_products()
     {
-        Assert.Equal(16, ServiceCatalog.All.Count);
+        Assert.Equal(17, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -19,18 +19,47 @@ public class ServiceCatalogTests
     }
 
     [Theory]
-    [InlineData("NoteworthyMCPSharp", 5710)]
-    [InlineData("SQLMCPSharp", 5712)]
     [InlineData("GithubMCPSharp", 5701)]
     [InlineData("RemoteAdminMCPSharp", 5706)]
+    [InlineData("NoteworthyMCPSharp", 5711)]
+    [InlineData("SQLMCPSharp", 5712)]
     [InlineData("RedisMCPSharp", 5713)]
-    [InlineData("MailCalMCPSharp", 5708)]
     [InlineData("ComfyUIMCPSharp", 5715)]
+    [InlineData("PortainerMCPSharp", 5716)]
+    [InlineData("MailCalMCPSharp", 5717)]
     public void Known_default_ports_are_recorded(string name, int expectedPort)
     {
         var entry = ServiceCatalog.FindByName(name);
         Assert.NotNull(entry);
         Assert.Equal(expectedPort, entry!.DefaultPort);
+    }
+
+    [Fact]
+    public void Default_ports_do_not_collide()
+    {
+        // DefaultPort is only a fallback for when a service's config cannot be read, but two
+        // products sharing one fallback is exactly the situation that made MailCal and
+        // Paperless-ngx unable to run side by side.
+        var ports = ServiceCatalog.All
+            .Where(e => e.DefaultPort is not null)
+            .Select(e => e.DefaultPort!.Value)
+            .ToList();
+
+        Assert.Equal(ports.Count, ports.Distinct().Count());
+    }
+
+    [Fact]
+    public void Portainer_is_catalogued_with_its_own_repo_and_prefix()
+    {
+        var entry = ServiceCatalog.FindByName("PortainerMCPSharp");
+
+        Assert.NotNull(entry);
+        Assert.Equal("PortainerMCPSharp", entry!.RepoName);
+        Assert.Equal("PORTAINERMCP_", entry.EnvPrefix);
+        Assert.Equal("portainer", entry.Key);
+        Assert.Equal("PortainerMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("PortainerMCPSharp-win-x64-self-contained-v0.1.0.zip",
+            entry.AssetFileName("win", "self-contained", "v0.1.0"));
     }
 
     [Fact]
