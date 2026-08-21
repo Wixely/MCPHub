@@ -16,8 +16,10 @@ namespace MCPHub.Core.Catalog;
 /// <param name="DisplayName">Short human-friendly name for the UI, e.g. <c>"Noteworthy"</c>.</param>
 /// <param name="Description">One-line description shown in the services list.</param>
 /// <param name="DefaultPort">
-/// Known default HTTP port the server listens on, or <see langword="null"/> when unknown — in which
-/// case the effective port is read from the installed <c>{Name}.json</c> <c>Server</c> section.
+/// Last-resort port used only when the installed config cannot be read at all. <see langword="null"/>
+/// for every MCPSharp product — their port is read from the installed <c>{Name}.json</c>
+/// <c>Server</c> section, which is the only copy this repo does not have to keep in sync.
+/// Non-catalog entries that own their own port (e.g. <c>DaggerAgent</c>) still set it.
 /// </param>
 /// <param name="EnvPrefix">
 /// Per-service environment-variable override prefix, e.g. <c>"NOTEWORTHYMCP_"</c> (with <c>__</c> nesting).
