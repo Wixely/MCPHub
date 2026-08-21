@@ -69,6 +69,40 @@ public class ServiceCatalogTests
         Assert.Equal(expectedKey, ServiceCatalog.FindByName(name)!.Key);
     }
 
+    [Theory]
+    // Display name, whole and partial, any case.
+    [InlineData("MailCalMCPSharp", "Mail & Calendar", true)]
+    [InlineData("MailCalMCPSharp", "calendar", true)]
+    [InlineData("ChromeDevToolsMCPSharp", "CHROME", true)]
+    // Product name, which is often what someone actually types.
+    [InlineData("MailCalMCPSharp", "mailcal", true)]
+    [InlineData("RepoDetoxMCPSharp", "repodetox", true)]
+    [InlineData("PaperlessNgxMCPSharp", "ngx", true)]
+    // Surrounding whitespace is ignored; a blank term matches everything.
+    [InlineData("SQLMCPSharp", "  sql  ", true)]
+    [InlineData("SQLMCPSharp", "", true)]
+    [InlineData("SQLMCPSharp", "   ", true)]
+    [InlineData("SQLMCPSharp", null, true)]
+    // Non-matches.
+    [InlineData("SQLMCPSharp", "redis", false)]
+    [InlineData("GithubMCPSharp", "gitlab", false)]
+    public void Search_matches_display_name_or_product_name(string name, string? term, bool expected)
+    {
+        var entry = ServiceCatalog.FindByName(name)!;
+        Assert.Equal(expected, entry.MatchesSearch(term));
+    }
+
+    [Fact]
+    public void Search_does_not_match_on_description()
+    {
+        // "MIDI" appears only in Noteworthy's description, never in either of its names. Searching
+        // descriptions would make the filter feel arbitrary — the box says it searches by name.
+        var entry = ServiceCatalog.FindByName("NoteworthyMCPSharp")!;
+
+        Assert.Contains("MIDI", entry.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.False(entry.MatchesSearch("MIDI"));
+    }
+
     [Fact]
     public void RepoDetox_maps_the_mcp_product_onto_its_multi_app_repo()
     {
