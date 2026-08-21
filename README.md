@@ -56,19 +56,29 @@ Add or remove servers later and your client config never changes — the proxy p
 
 ### Services
 
-Everything MCPHub manages, one row each.
+Everything MCPHub manages, one row each. The **search box** above the list narrows it as you type — by display name or product name, so both `mail` and `mailcal` find Mail & Calendar.
 
 | Column | Meaning |
 | --- | --- |
-| **Port** | The port this server listens on, read from its config. `auto` means it isn't installed yet. |
+| **Port** | The port this server listens on, read from its own config file. `auto` until it's installed, because that's when the config arrives. |
 | **Installed** | The version you have, or `—` if it isn't installed. |
 | **Latest** | The newest release on GitHub. The dot is green when you're current, amber when an update is waiting. |
 | **State** | Grey *Stopped*, amber *Starting*, green *Running*, red if it faulted. |
 | **Auto** | Start this server automatically when MCPHub launches. |
 
-The buttons are **Install** / **Update** / **Reinstall** (the label follows what's needed), **Start**, **Stop**, **Config** (opens that server's JSON in your editor) and **Logs**.
+The buttons:
+
+| Button | Does |
+| --- | --- |
+| **Install** / **Update** / **Reinstall** | Label follows what's needed. Your config is preserved. |
+| **Start** / **Restart** | Starts a stopped server. Once it's running the same button reads **Restart** and stops then starts it — which is what you want after editing a config. |
+| **Stop** | Stops it without starting again. |
+| **Config** | Opens that server's JSON in your editor. Servers that read more than one config file (Remote Admin) get a dropdown listing all of them. |
+| **Logs** | Jumps to the Logs page filtered to this server. |
 
 **Check for updates** refreshes the *Latest* column for everything at once. MCPHub remembers the answer, so it doesn't hit GitHub every time you open it.
+
+> **First time opening an extra config file?** Some servers ship their secondary files as `.example.json` templates so an update can never overwrite your real data. Picking one from the Config dropdown renames the template into place and opens it, pre-filled with the right shape.
 
 ### Diagnostics
 
@@ -112,25 +122,27 @@ This is the first place to look when a server won't start.
 
 | Server | Port | What it's for |
 | --- | --- | --- |
-| [Azure DevOps](https://github.com/Wixely/AzureDevopsMCPSharp) | auto | Boards, repos, pipelines and wikis |
-| [Chrome DevTools](https://github.com/Wixely/ChromeDevToolsMCPSharp) | auto | Drive Chrome via the DevTools Protocol |
-| [ComfyUI](https://github.com/Wixely/ComfyUIMCPSharp) | 5715 | Image generation with live progress |
+| [Azure DevOps](https://github.com/Wixely/AzureDevopsMCPSharp) | 5700 | Boards, repos, pipelines and wikis |
 | [GitHub](https://github.com/Wixely/GithubMCPSharp) | 5701 | Repositories, issues, pull requests, Actions |
-| [GitLab](https://github.com/Wixely/GitlabMCPSharp) | auto | Projects, merge requests, pipelines |
-| [Home Assistant](https://github.com/Wixely/HomeAssistantMCPSharp) | auto | Smart-home entities and automations |
-| [Mail & Calendar](https://github.com/Wixely/MailCalMCPSharp) | 5717 | Outlook, Gmail and IMAP mail plus calendars |
-| [Noteworthy](https://github.com/Wixely/NoteworthyMCPSharp) | 5711 | Create and edit MIDI music files |
-| [Paperless-ngx](https://github.com/Wixely/PaperlessNgxMCPSharp) | auto | Search and manage a document archive |
-| [Playwright](https://github.com/Wixely/PlaywrightMCPSharp) | auto | Cross-browser automation |
-| [Portainer](https://github.com/Wixely/PortainerMCPSharp) | 5716 | Docker stacks and containers via Portainer |
-| [Proxmox](https://github.com/Wixely/ProxmoxMCPSharp) | auto | Virtual machines and containers |
-| [Redis](https://github.com/Wixely/RedisMCPSharp) | 5713 | Read, write, search and diagnose Redis |
+| [GitLab](https://github.com/Wixely/GitlabMCPSharp) | 5702 | Projects, merge requests, pipelines |
+| [Home Assistant](https://github.com/Wixely/HomeAssistantMCPSharp) | 5703 | Smart-home entities and automations |
+| [Playwright](https://github.com/Wixely/PlaywrightMCPSharp) | 5704 | Cross-browser automation |
+| [Proxmox](https://github.com/Wixely/ProxmoxMCPSharp) | 5705 | Virtual machines and containers |
 | [Remote Admin](https://github.com/Wixely/RemoteAdminMCPSharp) | 5706 | Windows (WinRM) and Linux (SSH) administration |
-| [Repo Detox](https://github.com/Wixely/RepoDetox) | auto | Clean secrets and history out of git repos |
-| [RouterOS](https://github.com/Wixely/RouterOSMCPSharp) | auto | MikroTik router management |
+| [RouterOS](https://github.com/Wixely/RouterOSMCPSharp) | 5707 | MikroTik router management |
+| [Paperless-ngx](https://github.com/Wixely/PaperlessNgxMCPSharp) | 5708 | Search and manage a document archive |
+| [Chrome DevTools](https://github.com/Wixely/ChromeDevToolsMCPSharp) | 5709 | Drive Chrome via the DevTools Protocol |
+| [Noteworthy](https://github.com/Wixely/NoteworthyMCPSharp) | 5711 | Create and edit MIDI music files |
 | [SQL](https://github.com/Wixely/SQLMCPSharp) | 5712 | MSSQL, MySQL, Oracle and SQLite |
+| [Redis](https://github.com/Wixely/RedisMCPSharp) | 5713 | Read, write, search and diagnose Redis |
+| [Repo Detox](https://github.com/Wixely/RepoDetox) | 5714 | Clean secrets and history out of git repos |
+| [ComfyUI](https://github.com/Wixely/ComfyUIMCPSharp) | 5715 | Image generation with live progress |
+| [Portainer](https://github.com/Wixely/PortainerMCPSharp) | 5716 | Docker stacks and containers via Portainer |
+| [Mail & Calendar](https://github.com/Wixely/MailCalMCPSharp) | 5717 | Outlook, Gmail and IMAP mail plus calendars |
 
-`auto` means MCPHub reads the port out of that server's config file after you install it.
+These are each server's shipped default. MCPHub doesn't assume them — it reads the port from the
+server's own config after install, so changing one there is all it takes and the Services list
+follows.
 
 Most servers need configuring before they're useful — a connection string, an API token, the address of the thing they talk to. Click **Config** on the row to open that server's JSON, then **Stop** and **Start** it to pick up the change. Each server's own README documents its settings.
 
