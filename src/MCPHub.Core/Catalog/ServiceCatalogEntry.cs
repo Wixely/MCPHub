@@ -93,6 +93,23 @@ public sealed record ServiceCatalogEntry(
     /// <summary>Executable file name for the current OS.</summary>
     public string ExecutableFileName() => ExecutableFileName(RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
 
+    /// <summary>
+    /// Whether this product matches a free-text search term, for narrowing the services list.
+    ///
+    /// Both names are matched because they routinely differ: the list shows
+    /// <see cref="DisplayName"/> ("Mail &amp; Calendar"), but someone hunting for it is just as
+    /// likely to type the product name ("mailcal"). A blank term matches everything.
+    /// </summary>
+    public bool MatchesSearch(string? term)
+    {
+        var trimmed = term?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return true;
+
+        return DisplayName.Contains(trimmed, StringComparison.OrdinalIgnoreCase)
+               || Name.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>GitHub "latest release" API endpoint for this product.</summary>
     public string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
 

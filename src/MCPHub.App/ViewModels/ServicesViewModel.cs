@@ -25,7 +25,18 @@ public sealed partial class ServicesViewModel : ViewModelBase
     [ObservableProperty]
     private string? _statusMessage;
 
+    [ObservableProperty]
+    private string _filterText = string.Empty;
+
+    /// <summary>
+    /// Every managed server. Bulk operations (update checks, auto-run, state sync) always walk this
+    /// list, never <see cref="FilteredServices"/> — filtering is a view concern and must not quietly
+    /// narrow which services get started or checked.
+    /// </summary>
     public ObservableCollection<ManagedServiceViewModel> Services { get; } = [];
+
+    /// <summary>The subset shown in the list, narrowed by <see cref="FilterText"/>.</summary>
+    public ObservableCollection<ManagedServiceViewModel> FilteredServices { get; } = [];
 
     public ServicesViewModel(IServiceManager manager, IServiceProcessHost processHost, ISettingsStore settings)
     {
@@ -35,11 +46,43 @@ public sealed partial class ServicesViewModel : ViewModelBase
         foreach (var service in manager.Services.OrderBy(s => s.Catalog.DisplayName, StringComparer.OrdinalIgnoreCase))
             Services.Add(new ManagedServiceViewModel(service, manager, processHost, settings));
 
+        ApplyFilter();
+
         _processHost.StateChanged += OnServiceStateChanged;
 
         StatusMessage = $"Servers folder: {manager.ServersFolder}";
         _ = InitializeAsync();
     }
+
+    /// <summary>True when a filter is active but nothing matches, so the list can explain itself.</summary>
+    public bool HasNoMatches => FilteredServices.Count == 0 && Services.Count > 0;
+
+    /// <summary>e.g. "3 of 17 servers" while filtering; empty when showing everything.</summary>
+    public string FilterSummary => FilterText.Trim().Length == 0
+        ? string.Empty
+        : $"{FilteredServices.Count} of {Services.Count} servers";
+
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    /// <summary>
+    /// Rebuild <see cref="FilteredServices"/> from <see cref="Services"/>. The match itself lives on
+    /// ServiceCatalogEntry, where it is unit-testable without pulling Avalonia into the test project.
+    /// </summary>
+    private void ApplyFilter()
+    {
+        FilteredServices.Clear();
+        foreach (var vm in Services)
+        {
+            if (vm.MatchesSearch(FilterText))
+                FilteredServices.Add(vm);
+        }
+
+        OnPropertyChanged(nameof(HasNoMatches));
+        OnPropertyChanged(nameof(FilterSummary));
+    }
+
+    [RelayCommand]
+    private void ClearFilter() => FilterText = string.Empty;
 
     /// <summary>
     /// First-load routine: read installed versions and launch auto-run services. Latest versions come from

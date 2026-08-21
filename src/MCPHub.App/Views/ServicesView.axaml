@@ -33,6 +33,19 @@
                  TextTrimming="CharacterEllipsis"/>
     </Grid>
 
+    <!-- Search: narrows the list as you type -->
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="*,Auto,Auto">
+      <TextBox Grid.Column="0"
+               Watermark="Search servers by name…"
+               Text="{Binding FilterText}"
+               ToolTip.Tip="Matches the display name or the product name, e.g. 'mail' or 'mailcal'"/>
+      <Button Grid.Column="1" Content="Clear" Margin="8,0,0,0"
+              Command="{Binding ClearFilterCommand}"
+              IsVisible="{Binding FilterText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Grid.Column="2" Text="{Binding FilterSummary}"
+                 Margin="12,0,0,0" VerticalAlignment="Center" Opacity="0.6"/>
+    </Grid>
+
     <!-- Column header -->
     <Border DockPanel.Dock="Top" Background="#14000000" CornerRadius="6,6,0,0" Padding="14,9">
       <Grid ColumnDefinitions="*,52,80,88,96,52,354">
@@ -46,8 +59,13 @@
       </Grid>
     </Border>
 
+    <!-- Shown instead of an unexplained empty list when the filter matches nothing -->
+    <TextBlock DockPanel.Dock="Top" Margin="14,16,0,0" Opacity="0.6"
+               IsVisible="{Binding HasNoMatches}"
+               Text="No servers match that name."/>
+
     <ScrollViewer>
-      <ItemsControl ItemsSource="{Binding Services}">
+      <ItemsControl ItemsSource="{Binding FilteredServices}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ManagedServiceViewModel">
             <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,8">
