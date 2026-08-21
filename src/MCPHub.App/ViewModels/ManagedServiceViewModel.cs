@@ -33,6 +33,10 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     [ObservableProperty]
     private double _installProgress;
 
+    /// <summary>True between the stop and the start of a restart, so the button can't be re-entered.</summary>
+    [ObservableProperty]
+    private bool _isRestarting;
+
     /// <summary>When checked, MCPHub starts this service automatically on launch.</summary>
     [ObservableProperty]
     private bool _autoRun;
@@ -45,6 +49,12 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         _settings = settings;
         _autoRun = settings.Current.AutoStartServices.Contains(Name);
         BuildConfigFiles();
+    }
+
+    partial void OnIsRestartingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanStartOrRestart));
+        OnPropertyChanged(nameof(StartButtonText));
     }
 
     /// <summary>Persists the auto-run choice whenever the checkbox is toggled.</summary>
@@ -90,6 +100,15 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     public bool CanStart => _model.IsInstalled && _model.RunState is ServiceRunState.Stopped or ServiceRunState.Faulted;
 
     public bool CanStop => _model.RunState is ServiceRunState.Starting or ServiceRunState.Running or ServiceRunState.Unhealthy;
+
+    /// <summary>
+    /// The primary run button is enabled whenever the service is installed and not mid-restart —
+    /// it starts a stopped service and restarts a running one.
+    /// </summary>
+    public bool CanStartOrRestart => _model.IsInstalled && !IsRestarting && (CanStart || CanStop);
+
+    /// <summary>"Restart" once the service is up, otherwise "Start".</summary>
+    public string StartButtonText => IsRestarting ? "…" : CanStop ? "Restart" : "Start";
 
     public string InstallButtonText => !_model.IsInstalled
         ? "Install"
@@ -157,15 +176,40 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         return hit;
     }
 
-    /// <summary>Starts the service hidden; run-state then advances via health probes.</summary>
+    /// <summary>
+    /// Starts a stopped service, or restarts a running one (stop, then start).
+    ///
+    /// Restarting is the common case after editing a config file, and doing it as Stop-then-Start
+    /// left the row briefly looking idle and made a double-click easy — hence the single button and
+    /// the <see cref="IsRestarting"/> guard.
+    /// </summary>
     [RelayCommand]
-    private async Task StartAsync()
+    private async Task StartOrRestartAsync()
     {
-        if (!CanStart)
+        if (IsRestarting || !CanStartOrRestart)
             return;
 
-        await _processHost.StartAsync(_model);
-        SyncFromModel();
+        var wasRunning = CanStop;
+        IsRestarting = true;
+        try
+        {
+            if (wasRunning)
+            {
+                await _processHost.StopAsync(_model);
+                SyncFromModel();
+            }
+
+            // A stop that faulted leaves the service unable to start; don't paper over it.
+            if (!CanStart)
+                return;
+
+            await _processHost.StartAsync(_model);
+        }
+        finally
+        {
+            IsRestarting = false;
+            SyncFromModel();
+        }
     }
 
     /// <summary>Stops the running service.</summary>
@@ -266,6 +310,8 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         OnPropertyChanged(nameof(UpdateStatusText));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(CanStartOrRestart));
+        OnPropertyChanged(nameof(StartButtonText));
         OnPropertyChanged(nameof(InstallButtonText));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(CanOpenConfigMenu));
