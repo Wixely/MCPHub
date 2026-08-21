@@ -60,8 +60,18 @@ public static class ServiceCatalog
         new("RouterOSMCPSharp", "Wixely", "RouterOSMCPSharp",
             "RouterOS", "MikroTik RouterOS MCP server", null, "ROUTEROSMCP_"),
 
+        // Reads two host inventories beside its own config. The release ships only the
+        // *.example.json templates so an update can't overwrite real inventory; MCPHub promotes
+        // a template the first time you open it.
         new("RemoteAdminMCPSharp", "Wixely", "RemoteAdminMCPSharp",
-            "Remote Admin", "Remote administration (Windows WinRM / Linux SSH) MCP server", null, "REMOTEADMINMCP_"),
+            "Remote Admin", "Remote administration (Windows WinRM / Linux SSH) MCP server", null, "REMOTEADMINMCP_")
+        {
+            ExtraConfigFileNames =
+            [
+                "remote_admin_windows_servers.json",
+                "remote_admin_linux_servers.json",
+            ],
+        },
 
         new("ChromeDevToolsMCPSharp", "Wixely", "ChromeDevToolsMCPSharp",
             "Chrome DevTools", "Chrome DevTools Protocol MCP server", null, "CHROMEDEVTOOLSMCP_"),
