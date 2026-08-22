@@ -58,6 +58,8 @@ Add or remove servers later and your client config never changes — the proxy p
 
 Everything MCPHub manages, one row each. The **search box** above the list narrows it as you type — by display name or product name, so both `mail` and `mailcal` find Mail & Calendar.
 
+![Searching the services list narrows it to matching servers and shows a match count](docs/screenshots/08-services-search.png)
+
 | Column | Meaning |
 | --- | --- |
 | **Port** | The port this server listens on, read from its own config file. `auto` until it's installed, because that's when the config arrives. |
@@ -77,6 +79,8 @@ The buttons:
 | **Logs** | Jumps to the Logs page filtered to this server. |
 
 **Check for updates** refreshes the *Latest* column for everything at once. MCPHub remembers the answer, so it doesn't hit GitHub every time you open it.
+
+![The Config button opens a menu when a server reads more than one config file](docs/screenshots/09-config-dropdown.png)
 
 > **First time opening an extra config file?** Some servers ship their secondary files as `.example.json` templates so an update can never overwrite your real data. Picking one from the Config dropdown renames the template into place and opens it, pre-filled with the right shape.
 
