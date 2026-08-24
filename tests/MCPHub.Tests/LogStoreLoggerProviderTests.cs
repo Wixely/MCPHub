@@ -9,7 +9,7 @@ public class LogStoreLoggerProviderTests
     [Theory]
     [InlineData("MCPHub.Proxy.UpstreamRegistry")]
     [InlineData("MCPHub.App.Proxy.ProxyCoordinator")]
-    [InlineData("MCPHub.AppHost.ProxyHost")]
+    [InlineData("MCPHub.Hosting.ProxyHost")]
     public void Proxy_category_logs_are_captured_under_the_proxy_key(string category)
     {
         var store = new LogStore(capacity: 100);

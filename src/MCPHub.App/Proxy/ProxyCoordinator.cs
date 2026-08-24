@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using MCPHub.AppHost;
+using MCPHub.Hosting;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Settings;

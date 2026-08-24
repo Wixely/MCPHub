@@ -6,7 +6,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.App.Proxy;
-using MCPHub.AppHost;
+using MCPHub.Hosting;
 using MCPHub.Proxy;
 
 namespace MCPHub.App.ViewModels;

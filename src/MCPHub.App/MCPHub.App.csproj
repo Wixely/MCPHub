@@ -30,7 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MCPHub.Core\MCPHub.Core.csproj" />
     <ProjectReference Include="..\MCPHub.Proxy\MCPHub.Proxy.csproj" />
-    <ProjectReference Include="..\MCPHub.AppHost\MCPHub.AppHost.csproj" />
+    <ProjectReference Include="..\MCPHub.Hosting\MCPHub.Hosting.csproj" />
   </ItemGroup>
 
 </Project>

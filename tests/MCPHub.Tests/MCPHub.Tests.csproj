@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MCPHub.Core\MCPHub.Core.csproj" />
     <ProjectReference Include="..\..\src\MCPHub.Proxy\MCPHub.Proxy.csproj" />
+    <ProjectReference Include="..\..\src\MCPHub.Hosting\MCPHub.Hosting.csproj" />
   </ItemGroup>
 
 </Project>

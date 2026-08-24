@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>MCPHub.AppHost</RootNamespace>
-    <AssemblyName>MCPHub.AppHost</AssemblyName>
+    <RootNamespace>MCPHub.Hosting</RootNamespace>
+    <AssemblyName>MCPHub.Hosting</AssemblyName>
   </PropertyGroup>
 
   <!-- Library that hosts an in-process Kestrel/ASP.NET Core MCP endpoint. -->

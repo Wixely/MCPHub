@@ -2,7 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/MCPHub.Core/MCPHub.Core.csproj" />
     <Project Path="src/MCPHub.Proxy/MCPHub.Proxy.csproj" />
-    <Project Path="src/MCPHub.AppHost/MCPHub.AppHost.csproj" />
+    <Project Path="src/MCPHub.Hosting/MCPHub.Hosting.csproj" />
     <Project Path="src/MCPHub.App/MCPHub.App.csproj" />
   </Folder>
   <Folder Name="/tests/">

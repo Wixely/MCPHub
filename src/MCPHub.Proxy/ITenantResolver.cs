@@ -31,6 +31,18 @@ public sealed class DefaultTenantResolver : ITenantResolver
 }
 
 /// <summary>
+/// Resolves every caller to one fixed tenant. For the one-host-per-tenant topology, where each
+/// hosted endpoint serves exactly one tenant and no per-request authentication is wanted.
+/// </summary>
+public sealed class FixedTenantResolver(TenantContext tenant) : ITenantResolver
+{
+    private readonly TenantContext _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
+
+    /// <inheritdoc />
+    public TenantContext Resolve(ClaimsPrincipal? user) => _tenant;
+}
+
+/// <summary>
 /// Resolves the tenant from the principal's <see cref="ProxyClaimTypes.TenantId"/> claim, falling
 /// back to <see cref="TenantContext.Default"/> when the claim is absent (anonymous mode).
 /// </summary>

@@ -2,7 +2,7 @@ using System;
 using System.Net.Http.Headers;
 using MCPHub.App.Proxy;
 using MCPHub.App.ViewModels;
-using MCPHub.AppHost;
+using MCPHub.Hosting;
 using MCPHub.Core.Agent;
 using MCPHub.Core.Slopworks;
 using MCPHub.Core.Infrastructure;
@@ -51,7 +51,9 @@ public static class Composition
         // MCP proxy / aggregator
         services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
         services.AddSingleton<ProxyHandlers>();
-        services.AddSingleton<ProxyHost>();
+        services.AddSingleton(sp => new ProxyHost(
+            sp.GetRequiredService<ProxyHandlers>(),
+            sp.GetRequiredService<ILoggerFactory>()));
         services.AddSingleton<ProxyCoordinator>();
 
         // HTTP clients: GitHub releases, a short-timeout health probe, and long-timeout downloads.
