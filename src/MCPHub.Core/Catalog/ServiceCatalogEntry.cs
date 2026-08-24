@@ -16,8 +16,10 @@ namespace MCPHub.Core.Catalog;
 /// <param name="DisplayName">Short human-friendly name for the UI, e.g. <c>"Noteworthy"</c>.</param>
 /// <param name="Description">One-line description shown in the services list.</param>
 /// <param name="DefaultPort">
-/// Known default HTTP port the server listens on, or <see langword="null"/> when unknown — in which
-/// case the effective port is read from the installed <c>{Name}.json</c> <c>Server</c> section.
+/// Last-resort port used only when the installed config cannot be read at all. <see langword="null"/>
+/// for every MCPSharp product — their port is read from the installed <c>{Name}.json</c>
+/// <c>Server</c> section, which is the only copy this repo does not have to keep in sync.
+/// Non-catalog entries that own their own port (e.g. <c>DaggerAgent</c>) still set it.
 /// </param>
 /// <param name="EnvPrefix">
 /// Per-service environment-variable override prefix, e.g. <c>"NOTEWORTHYMCP_"</c> (with <c>__</c> nesting).
@@ -55,6 +57,22 @@ public sealed record ServiceCatalogEntry(
     public string ConfigFileName => ConfigFileNameOverride ?? $"{Name}.json";
 
     /// <summary>
+    /// Additional config files this product reads beside <see cref="ConfigFileName"/>, in the order
+    /// they should appear in the UI. Empty for most products.
+    ///
+    /// These typically ship only as <c>.example.json</c> templates so an update cannot overwrite
+    /// real data — see <see cref="ConfigFileResolver"/>, which promotes the template on first open.
+    /// </summary>
+    public IReadOnlyList<string> ExtraConfigFileNames { get; init; } = [];
+
+    /// <summary>Primary config plus any extras, in display order.</summary>
+    public IReadOnlyList<string> AllConfigFileNames =>
+        [ConfigFileName, .. ExtraConfigFileNames];
+
+    /// <summary>True when this product reads more than one config file.</summary>
+    public bool HasExtraConfigFiles => ExtraConfigFileNames.Count > 0;
+
+    /// <summary>
     /// Short lowercase slug used to namespace this server's tools in the proxy (product name minus the
     /// trailing "MCPSharp"), e.g. <c>noteworthy</c> for <c>NoteworthyMCPSharp</c>.
     /// </summary>
@@ -74,6 +92,23 @@ public sealed record ServiceCatalogEntry(
 
     /// <summary>Executable file name for the current OS.</summary>
     public string ExecutableFileName() => ExecutableFileName(RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+
+    /// <summary>
+    /// Whether this product matches a free-text search term, for narrowing the services list.
+    ///
+    /// Both names are matched because they routinely differ: the list shows
+    /// <see cref="DisplayName"/> ("Mail &amp; Calendar"), but someone hunting for it is just as
+    /// likely to type the product name ("mailcal"). A blank term matches everything.
+    /// </summary>
+    public bool MatchesSearch(string? term)
+    {
+        var trimmed = term?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return true;
+
+        return DisplayName.Contains(trimmed, StringComparison.OrdinalIgnoreCase)
+               || Name.Contains(trimmed, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>GitHub "latest release" API endpoint for this product.</summary>
     public string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";

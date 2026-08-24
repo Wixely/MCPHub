@@ -77,8 +77,18 @@ public sealed class ServiceProcessHost : IServiceProcessHost
     {
         _services[service.Catalog.Name] = service;
 
-        // Follow the server's own config for the effective port; fall back to the catalog default.
+        // The server's own config is the source of truth for its port; DefaultPort is a last resort
+        // that is null for every MCPSharp product.
         service.Port = ServerConfigReader.ReadPort(service.ConfigPath) ?? service.Catalog.DefaultPort;
+
+        // Without a port there is no health URL, so the service would sit at Starting forever and the
+        // proxy would never register it. Say so plainly instead of leaving it a mystery.
+        if (service.Port is null)
+        {
+            AppendInfo(service,
+                $"Could not read Server.Port from {service.Catalog.ConfigFileName}. " +
+                "Health checks and proxy registration need it — check the file is present and valid JSON.");
+        }
 
         return _host.StartAsync(new ProcessSpec
         {
@@ -100,6 +110,10 @@ public sealed class ServiceProcessHost : IServiceProcessHost
     public Task StopAllAsync() => _host.StopAllAsync();
 
     public ValueTask DisposeAsync() => _host.DisposeAsync();
+
+    /// <summary>Writes a lifecycle message into the service's log, as the process host itself does.</summary>
+    private void AppendInfo(ManagedService service, string text)
+        => _logStore.Append(service.Catalog.Name, new LogLine(DateTimeOffset.Now, LogStream.Info, text));
 
     private static LogStream MapStream(ProcessOutputStream stream) => stream switch
     {

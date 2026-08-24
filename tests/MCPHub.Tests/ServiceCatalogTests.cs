@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_sixteen_products()
+    public void Catalog_contains_all_seventeen_products()
     {
-        Assert.Equal(16, ServiceCatalog.All.Count);
+        Assert.Equal(17, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -18,19 +18,32 @@ public class ServiceCatalogTests
         Assert.Equal(ServiceCatalog.All.Count, distinct.Count());
     }
 
-    [Theory]
-    [InlineData("NoteworthyMCPSharp", 5710)]
-    [InlineData("SQLMCPSharp", 5712)]
-    [InlineData("GithubMCPSharp", 5701)]
-    [InlineData("RemoteAdminMCPSharp", 5706)]
-    [InlineData("RedisMCPSharp", 5713)]
-    [InlineData("MailCalMCPSharp", 5708)]
-    [InlineData("ComfyUIMCPSharp", 5715)]
-    public void Known_default_ports_are_recorded(string name, int expectedPort)
+    [Fact]
+    public void No_product_hard_codes_a_port()
     {
-        var entry = ServiceCatalog.FindByName(name);
+        // Ports live in each server's own {Name}.json and are read by ServerConfigReader. A copy
+        // here would be a second source of truth for a value this repo does not own — which is
+        // exactly how MailCal (moved to 5717) and Noteworthy (always 5711) ended up wrong.
+        var hardCoded = ServiceCatalog.All
+            .Where(e => e.DefaultPort is not null)
+            .Select(e => $"{e.Name}={e.DefaultPort}")
+            .ToList();
+
+        Assert.Empty(hardCoded);
+    }
+
+    [Fact]
+    public void Portainer_is_catalogued_with_its_own_repo_and_prefix()
+    {
+        var entry = ServiceCatalog.FindByName("PortainerMCPSharp");
+
         Assert.NotNull(entry);
-        Assert.Equal(expectedPort, entry!.DefaultPort);
+        Assert.Equal("PortainerMCPSharp", entry!.RepoName);
+        Assert.Equal("PORTAINERMCP_", entry.EnvPrefix);
+        Assert.Equal("portainer", entry.Key);
+        Assert.Equal("PortainerMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("PortainerMCPSharp-win-x64-self-contained-v0.1.0.zip",
+            entry.AssetFileName("win", "self-contained", "v0.1.0"));
     }
 
     [Fact]
@@ -54,6 +67,40 @@ public class ServiceCatalogTests
     public void Proxy_key_is_the_product_name_minus_the_mcpsharp_suffix(string name, string expectedKey)
     {
         Assert.Equal(expectedKey, ServiceCatalog.FindByName(name)!.Key);
+    }
+
+    [Theory]
+    // Display name, whole and partial, any case.
+    [InlineData("MailCalMCPSharp", "Mail & Calendar", true)]
+    [InlineData("MailCalMCPSharp", "calendar", true)]
+    [InlineData("ChromeDevToolsMCPSharp", "CHROME", true)]
+    // Product name, which is often what someone actually types.
+    [InlineData("MailCalMCPSharp", "mailcal", true)]
+    [InlineData("RepoDetoxMCPSharp", "repodetox", true)]
+    [InlineData("PaperlessNgxMCPSharp", "ngx", true)]
+    // Surrounding whitespace is ignored; a blank term matches everything.
+    [InlineData("SQLMCPSharp", "  sql  ", true)]
+    [InlineData("SQLMCPSharp", "", true)]
+    [InlineData("SQLMCPSharp", "   ", true)]
+    [InlineData("SQLMCPSharp", null, true)]
+    // Non-matches.
+    [InlineData("SQLMCPSharp", "redis", false)]
+    [InlineData("GithubMCPSharp", "gitlab", false)]
+    public void Search_matches_display_name_or_product_name(string name, string? term, bool expected)
+    {
+        var entry = ServiceCatalog.FindByName(name)!;
+        Assert.Equal(expected, entry.MatchesSearch(term));
+    }
+
+    [Fact]
+    public void Search_does_not_match_on_description()
+    {
+        // "MIDI" appears only in Noteworthy's description, never in either of its names. Searching
+        // descriptions would make the filter feel arbitrary — the box says it searches by name.
+        var entry = ServiceCatalog.FindByName("NoteworthyMCPSharp")!;
+
+        Assert.Contains("MIDI", entry.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.False(entry.MatchesSearch("MIDI"));
     }
 
     [Fact]
