@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using DiagProcess = System.Diagnostics.Process;
 
-namespace MCPHub.Core.Process;
+namespace MCPHub.Processes;
 
 /// <summary>
 /// A Windows Job Object configured to kill all assigned processes when the job handle closes — which

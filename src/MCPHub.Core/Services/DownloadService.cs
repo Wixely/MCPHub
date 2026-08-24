@@ -5,6 +5,7 @@ using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
+using MCPHub.Processes;
 using MCPHub.Core.Services.Github;
 using Microsoft.Extensions.Logging;
 

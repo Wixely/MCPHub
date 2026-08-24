@@ -1,9 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
+using MCPHub.Processes;
 using Microsoft.Extensions.Logging;
-using DiagProcess = System.Diagnostics.Process;
-using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
 namespace MCPHub.Core.Process;
 
@@ -28,278 +28,93 @@ public interface IServiceProcessHost : IAsyncDisposable
     event Action<ManagedService>? StateChanged;
 }
 
-/// <inheritdoc />
+/// <summary>
+/// Adapter between the app's <see cref="ManagedService"/> model and the generic
+/// <see cref="ProcessHost"/> from MCPHub.Processes: maps catalog/install-folder settings onto a
+/// <see cref="ProcessSpec"/> at start, and process events back onto the service's mutable state.
+/// </summary>
 public sealed class ServiceProcessHost : IServiceProcessHost
 {
     /// <summary>Name of the configured short-timeout <see cref="HttpClient"/> used for health probes.</summary>
     public const string HealthClientName = "health";
 
-    private static readonly TimeSpan HealthInterval = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan NoPortGrace = TimeSpan.FromSeconds(2);
-
+    private readonly ProcessHost _host;
     private readonly ILogStore _logStore;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<ServiceProcessHost> _logger;
-
-    private readonly Dictionary<string, RunningProcess> _running = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _gate = new();
-    private readonly CancellationTokenSource _shutdown = new();
-    private readonly WindowsJobObject? _jobObject;
-    private Task? _healthLoop;
+    private readonly ConcurrentDictionary<string, ManagedService> _services = new(StringComparer.OrdinalIgnoreCase);
 
     public ServiceProcessHost(ILogStore logStore, IHttpClientFactory httpClientFactory, ILogger<ServiceProcessHost> logger)
     {
         _logStore = logStore;
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
+        _host = new ProcessHost(new ProcessHostOptions
+        {
+            HealthClientFactory = () => httpClientFactory.CreateClient(HealthClientName),
+        }, logger);
 
-        // Children assigned to this job die with MCPHub even on a crash/force-kill.
-        if (OperatingSystem.IsWindows())
-            _jobObject = new WindowsJobObject();
+        _host.OutputReceived += line =>
+            _logStore.Append(line.Name, new LogLine(line.Timestamp, MapStream(line.Stream), line.Text));
+
+        _host.StateChanged += change =>
+        {
+            if (!_services.TryGetValue(change.Name, out var service))
+                return;
+
+            if (change.State == ProcessRunState.Starting)
+                service.StartedAt = DateTimeOffset.Now;
+            service.ProcessId = change.ProcessId;
+            service.RunState = MapState(change.State);
+            StateChanged?.Invoke(service);
+        };
     }
 
+    /// <inheritdoc />
     public event Action<ManagedService>? StateChanged;
 
-    public bool IsRunning(string serviceName)
-    {
-        lock (_gate)
-            return _running.ContainsKey(serviceName);
-    }
+    /// <inheritdoc />
+    public bool IsRunning(string serviceName) => _host.IsRunning(serviceName);
 
+    /// <inheritdoc />
     public Task StartAsync(ManagedService service, CancellationToken cancellationToken = default)
     {
-        lock (_gate)
-        {
-            if (_running.ContainsKey(service.Catalog.Name))
-                return Task.CompletedTask;
-        }
-
-        if (!File.Exists(service.ExecutablePath))
-        {
-            AppendInfo(service, $"Executable not found: {service.ExecutablePath}");
-            SetState(service, ServiceRunState.Faulted);
-            return Task.CompletedTask;
-        }
+        _services[service.Catalog.Name] = service;
 
         // Follow the server's own config for the effective port; fall back to the catalog default.
         service.Port = ServerConfigReader.ReadPort(service.ConfigPath) ?? service.Catalog.DefaultPort;
 
-        var process = new DiagProcess
+        return _host.StartAsync(new ProcessSpec
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = service.ExecutablePath,
-                WorkingDirectory = service.InstallFolder,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            },
-            EnableRaisingEvents = true,
-        };
-
-        var running = new RunningProcess(process, service);
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) Append(service, LogStream.Stdout, e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) Append(service, LogStream.Stderr, e.Data); };
-        process.Exited += (_, _) => OnExited(running);
-
-        try
-        {
-            SetState(service, ServiceRunState.Starting);
-            service.StartedAt = DateTimeOffset.Now;
-            process.Start();
-            if (OperatingSystem.IsWindows())
-                _jobObject?.AssignProcess(process);
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            service.ProcessId = process.Id;
-            AppendInfo(service, $"Started (pid {process.Id}); waiting for health on port {service.Port?.ToString() ?? "?"}…");
-        }
-        catch (Exception ex)
-        {
-            AppendInfo(service, "Failed to start: " + ex.Message);
-            _logger.LogError(ex, "Failed to start {Service}.", service.Catalog.Name);
-            SetState(service, ServiceRunState.Faulted);
-            return Task.CompletedTask;
-        }
-
-        lock (_gate)
-            _running[service.Catalog.Name] = running;
-
-        EnsureHealthLoop();
-        return Task.CompletedTask;
+            Name = service.Catalog.Name,
+            ExecutablePath = service.ExecutablePath,
+            WorkingDirectory = service.InstallFolder,
+            HealthUrl = service.HealthUrl is { } url ? new Uri(url) : null,
+        }, cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task StopAsync(ManagedService service, CancellationToken cancellationToken = default)
     {
-        RunningProcess? running;
-        lock (_gate)
-            _running.TryGetValue(service.Catalog.Name, out running);
-
-        if (running is null)
-        {
-            SetState(service, ServiceRunState.Stopped);
-            return Task.CompletedTask;
-        }
-
-        running.StopRequested = true;
-        SetState(service, ServiceRunState.Stopping);
-        try
-        {
-            running.Process.Kill(entireProcessTree: true);
-        }
-        catch (Exception ex)
-        {
-            AppendInfo(service, "Kill failed: " + ex.Message);
-        }
-
-        return Task.CompletedTask;
+        _services[service.Catalog.Name] = service;
+        return _host.StopAsync(service.Catalog.Name, cancellationToken);
     }
 
-    public Task StopAllAsync()
+    /// <inheritdoc />
+    public Task StopAllAsync() => _host.StopAllAsync();
+
+    public ValueTask DisposeAsync() => _host.DisposeAsync();
+
+    private static LogStream MapStream(ProcessOutputStream stream) => stream switch
     {
-        List<RunningProcess> snapshot;
-        lock (_gate)
-            snapshot = _running.Values.ToList();
+        ProcessOutputStream.Stdout => LogStream.Stdout,
+        ProcessOutputStream.Stderr => LogStream.Stderr,
+        _ => LogStream.Info,
+    };
 
-        foreach (var running in snapshot)
-        {
-            running.StopRequested = true;
-            try { running.Process.Kill(entireProcessTree: true); }
-            catch { /* best effort on shutdown */ }
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private void OnExited(RunningProcess running)
+    private static ServiceRunState MapState(ProcessRunState state) => state switch
     {
-        var service = running.Service;
-        var exitCode = TryGetExitCode(running.Process);
-
-        lock (_gate)
-            _running.Remove(service.Catalog.Name);
-
-        service.ProcessId = null;
-
-        if (running.StopRequested)
-        {
-            AppendInfo(service, $"Stopped (exit code {exitCode}).");
-            SetState(service, ServiceRunState.Stopped);
-        }
-        else
-        {
-            AppendInfo(service, $"Exited unexpectedly (exit code {exitCode}).");
-            SetState(service, ServiceRunState.Faulted);
-        }
-
-        try { running.Process.Dispose(); } catch { /* ignore */ }
-    }
-
-    private void EnsureHealthLoop()
-    {
-        lock (_gate)
-            _healthLoop ??= Task.Run(HealthLoopAsync);
-    }
-
-    private async Task HealthLoopAsync()
-    {
-        var http = _httpClientFactory.CreateClient(HealthClientName);
-        using var timer = new PeriodicTimer(HealthInterval);
-
-        try
-        {
-            while (await timer.WaitForNextTickAsync(_shutdown.Token))
-            {
-                List<RunningProcess> snapshot;
-                lock (_gate)
-                    snapshot = _running.Values.ToList();
-
-                foreach (var running in snapshot)
-                {
-                    if (!running.Process.HasExited)
-                        await ProbeHealthAsync(running.Service, http);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // shutting down
-        }
-    }
-
-    private async Task ProbeHealthAsync(ManagedService service, HttpClient http)
-    {
-        // No known port → can't probe; treat as Running once it has survived a short grace period.
-        if (service.HealthUrl is null)
-        {
-            if (service.RunState == ServiceRunState.Starting &&
-                service.StartedAt is { } started && DateTimeOffset.Now - started > NoPortGrace)
-                SetState(service, ServiceRunState.Running);
-            return;
-        }
-
-        try
-        {
-            using var response = await http.GetAsync(service.HealthUrl, _shutdown.Token);
-            if (response.IsSuccessStatusCode)
-            {
-                if (service.RunState is ServiceRunState.Starting or ServiceRunState.Unhealthy)
-                    SetState(service, ServiceRunState.Running);
-            }
-            else if (service.RunState == ServiceRunState.Running)
-            {
-                SetState(service, ServiceRunState.Unhealthy);
-            }
-        }
-        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
-        {
-            // shutting down
-        }
-        catch
-        {
-            // Connection refused/timeout. While Starting the server may still be booting; once it has
-            // been Running, a failure means it went Unhealthy.
-            if (service.RunState == ServiceRunState.Running)
-                SetState(service, ServiceRunState.Unhealthy);
-        }
-    }
-
-    private void Append(ManagedService service, LogStream stream, string text)
-        => _logStore.Append(service.Catalog.Name, new LogLine(DateTimeOffset.Now, stream, text));
-
-    private void AppendInfo(ManagedService service, string text)
-        => _logStore.Append(service.Catalog.Name, new LogLine(DateTimeOffset.Now, LogStream.Info, text));
-
-    private void SetState(ManagedService service, ServiceRunState state)
-    {
-        service.RunState = state;
-        StateChanged?.Invoke(service);
-    }
-
-    private static int TryGetExitCode(DiagProcess process)
-    {
-        try { return process.ExitCode; }
-        catch { return -1; }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _shutdown.CancelAsync();
-        await StopAllAsync();
-        if (_healthLoop is not null)
-        {
-            try { await _healthLoop; } catch { /* ignore */ }
-        }
-        if (OperatingSystem.IsWindows())
-            _jobObject?.Dispose();
-        _shutdown.Dispose();
-    }
-
-    private sealed class RunningProcess(DiagProcess process, ManagedService service)
-    {
-        public DiagProcess Process { get; } = process;
-        public ManagedService Service { get; } = service;
-        public bool StopRequested { get; set; }
-    }
+        ProcessRunState.Stopped => ServiceRunState.Stopped,
+        ProcessRunState.Starting => ServiceRunState.Starting,
+        ProcessRunState.Running => ServiceRunState.Running,
+        ProcessRunState.Unhealthy => ServiceRunState.Unhealthy,
+        ProcessRunState.Stopping => ServiceRunState.Stopping,
+        _ => ServiceRunState.Faulted,
+    };
 }

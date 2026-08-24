@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace MCPHub.Core.Process;
+namespace MCPHub.Processes;
 
 /// <summary>
 /// Reads the effective listen port/host from an installed <c>{Name}.json</c> config's <c>Server</c>

@@ -2,6 +2,7 @@ using System.Net.Http;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
+using MCPHub.Processes;
 using Microsoft.Extensions.Logging;
 using DiagProcess = System.Diagnostics.Process;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;

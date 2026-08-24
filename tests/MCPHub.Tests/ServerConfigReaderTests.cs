@@ -1,4 +1,4 @@
-using MCPHub.Core.Process;
+using MCPHub.Processes;
 using Xunit;
 
 namespace MCPHub.Tests;
