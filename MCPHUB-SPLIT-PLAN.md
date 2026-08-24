@@ -169,7 +169,7 @@ enabled; XML docs on public surface; `TreatWarningsAsErrors`.
 
 ## 5. Acceptance criteria
 
-- [ ] Three packages on the Wixely feed, restorable with a `read:packages` PAT.
+- [x] Three packages on the Wixely feed, restorable with a `read:packages` PAT. (v0.6.0)
 - [x] `MCPHub.Proxy` has no dependency on `MCPHub.Core` (or any desktop concern).
 - [x] A consumer can embed registry + host in-process and serve an aggregated `/mcp` endpoint
       with under ~20 lines of setup (the sample is the measure).
