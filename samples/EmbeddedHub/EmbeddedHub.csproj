@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Consumer smoke sample: references the PACKAGES from artifacts/packages (see NuGet.config),
+    never the projects — run eng/PackLibraries.ps1 first. Deliberately not part of MCPHub.slnx
+    so the main solution never depends on packed artifacts.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>EmbeddedHub</RootNamespace>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MCPHub.Proxy" Version="0.*" />
+    <PackageReference Include="MCPHub.Hosting" Version="0.*" />
+  </ItemGroup>
+
+</Project>

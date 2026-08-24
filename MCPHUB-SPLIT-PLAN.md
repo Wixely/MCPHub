@@ -170,17 +170,17 @@ enabled; XML docs on public surface; `TreatWarningsAsErrors`.
 ## 5. Acceptance criteria
 
 - [ ] Three packages on the Wixely feed, restorable with a `read:packages` PAT.
-- [ ] `MCPHub.Proxy` has no dependency on `MCPHub.Core` (or any desktop concern).
-- [ ] A consumer can embed registry + host in-process and serve an aggregated `/mcp` endpoint
+- [x] `MCPHub.Proxy` has no dependency on `MCPHub.Core` (or any desktop concern).
+- [x] A consumer can embed registry + host in-process and serve an aggregated `/mcp` endpoint
       with under ~20 lines of setup (the sample is the measure).
-- [ ] Two tenants against one registry: disjoint `tools/list` results; call to an ungranted
+- [x] Two tenants against one registry: disjoint `tools/list` results; call to an ungranted
       tool → MCP error + audit event marked denied; granted call → success + audit event with
       args digest, no raw args anywhere.
-- [ ] Bearer-token mode rejects unauthenticated requests; anonymous mode preserved for desktop.
-- [ ] Two independent `ProxyHost` instances run in one process (per-tenant-listener fallback).
+- [x] Bearer-token mode rejects unauthenticated requests; anonymous mode preserved for desktop.
+- [x] Two independent `ProxyHost` instances run in one process (per-tenant-listener fallback).
 - [ ] MCPHub desktop release built from the refactored solution behaves identically to the
       previous release (manual pass of the standard flows).
-- [ ] CI packs on PR; release workflow publishes; packages include symbols, licenses, READMEs.
+- [x] CI packs on PR; release workflow publishes; packages include symbols, licenses, READMEs.
 
 ## 6. Notes for the Banter side (context, no action needed in MCPHub)
 
