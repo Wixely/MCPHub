@@ -30,3 +30,14 @@ jobs:
 
       - name: Test
         run: dotnet test MCPHub.slnx -c Release --no-build --verbosity normal
+
+      # Packability gate: a change that breaks dotnet pack fails the PR, not the release.
+      - name: Pack libraries
+        run: pwsh eng/PackLibraries.ps1 -CI
+
+      # Consumer gate: the sample restores the freshly packed packages from the local feed
+      # (never project references), proving external consumption works end to end.
+      - name: Build and run consumer sample
+        run: |
+          dotnet restore samples/EmbeddedHub/EmbeddedHub.csproj
+          dotnet run --project samples/EmbeddedHub/EmbeddedHub.csproj --no-restore

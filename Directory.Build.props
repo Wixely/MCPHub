@@ -12,6 +12,11 @@
     <Company>Wixely Holmes</Company>
     <Copyright>Copyright (c) 2026 Wixely Holmes</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/Wixely/MCPHub</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/Wixely/MCPHub</PackageProjectUrl>
+    <!-- Only projects that opt in via MCPHubPackable produce packages (see Directory.Build.targets). -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
 </Project>

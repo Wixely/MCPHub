@@ -22,6 +22,7 @@ public interface IProcessHost : IAsyncDisposable
     /// <summary>Stops every running process (used on host shutdown).</summary>
     Task StopAllAsync();
 
+    /// <summary>Whether a process with this <see cref="ProcessSpec.Name"/> is currently tracked as running.</summary>
     bool IsRunning(string name);
 
     /// <summary>Raised whenever a process's run-state changes (on a background thread).</summary>
@@ -44,6 +45,7 @@ public sealed class ProcessHost : IProcessHost
     private HttpClient? _healthClient;
     private Task? _healthLoop;
 
+    /// <summary>Creates a host; on Windows a kill-on-close job object is created immediately.</summary>
     public ProcessHost(ProcessHostOptions? options = null, ILogger? logger = null)
     {
         _options = options ?? new ProcessHostOptions();
@@ -298,6 +300,7 @@ public sealed class ProcessHost : IProcessHost
         catch { return -1; }
     }
 
+    /// <summary>Stops every process, ends the health loop, and closes the job object (killing survivors).</summary>
     public async ValueTask DisposeAsync()
     {
         await _shutdown.CancelAsync();

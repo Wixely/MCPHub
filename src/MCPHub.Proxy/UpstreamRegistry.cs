@@ -11,6 +11,7 @@ namespace MCPHub.Proxy;
 /// </summary>
 public interface IUpstreamRegistry
 {
+    /// <summary>Snapshot of every registered upstream and its connection state.</summary>
     IReadOnlyCollection<UpstreamServer> Upstreams { get; }
 
     /// <summary>Current aggregated catalog snapshot (atomic).</summary>
@@ -19,9 +20,16 @@ public interface IUpstreamRegistry
     /// <summary>Raised after the catalog changes (an upstream connected/disconnected/re-listed).</summary>
     event Action? CatalogChanged;
 
+    /// <summary>Connects (or reconnects) an HTTP upstream and folds its tools into the catalog under <paramref name="key"/>.</summary>
     Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default);
+
+    /// <summary>Connects (or reconnects) a stdio upstream launched as <paramref name="command"/> and folds its tools into the catalog under <paramref name="key"/>.</summary>
     Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes an upstream and rebuilds the catalog without it.</summary>
     Task DisconnectAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>Disconnects every upstream and empties the catalog (used on shutdown).</summary>
     Task DisconnectAllAsync();
 }
 
@@ -36,18 +44,23 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
     private volatile AggregatedCatalog _catalog = AggregatedCatalog.Empty;
     private Task? _reconnectLoop;
 
+    /// <summary>Creates a registry; upstream client transports log through <paramref name="loggerFactory"/>.</summary>
     public UpstreamRegistry(ILoggerFactory loggerFactory)
     {
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<UpstreamRegistry>();
     }
 
+    /// <inheritdoc />
     public IReadOnlyCollection<UpstreamServer> Upstreams => _upstreams.Values.ToArray();
 
+    /// <inheritdoc />
     public AggregatedCatalog Catalog => _catalog;
 
+    /// <inheritdoc />
     public event Action? CatalogChanged;
 
+    /// <inheritdoc />
     public Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default)
         => ConnectCoreAsync(key, displayName, endpoint.ToString(),
             () => new HttpClientTransport(
@@ -55,6 +68,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
                 _loggerFactory),
             cancellationToken);
 
+    /// <inheritdoc />
     public Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
         => ConnectCoreAsync(key, displayName, $"stdio: {command}",
             () => new StdioClientTransport(
@@ -133,6 +147,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
         }
     }
 
+    /// <inheritdoc />
     public async Task DisconnectAsync(string key, CancellationToken cancellationToken = default)
     {
         if (_upstreams.TryRemove(key, out var upstream))
@@ -142,6 +157,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
         }
     }
 
+    /// <inheritdoc />
     public async Task DisconnectAllAsync()
     {
         await _shutdown.CancelAsync();

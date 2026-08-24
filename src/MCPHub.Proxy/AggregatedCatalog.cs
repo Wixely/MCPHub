@@ -16,9 +16,11 @@ public sealed record ToolRoute(McpClient Client, string OriginalName, string Ser
 /// </summary>
 public sealed class AggregatedCatalog
 {
+    /// <summary>The empty catalog (no upstreams connected).</summary>
     public static readonly AggregatedCatalog Empty =
         new([], new Dictionary<string, ToolRoute>(StringComparer.Ordinal));
 
+    /// <summary>Creates a snapshot from the advertised tools and their routes.</summary>
     public AggregatedCatalog(IReadOnlyList<Tool> tools, IReadOnlyDictionary<string, ToolRoute> routes)
     {
         Tools = tools;

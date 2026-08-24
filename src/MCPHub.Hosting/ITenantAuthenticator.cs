@@ -24,6 +24,7 @@ public sealed class StaticTenantAuthenticator : ITenantAuthenticator
 {
     private readonly Dictionary<string, TenantContext> _tokens;
 
+    /// <summary>Creates the authenticator from a token → tenant-id map.</summary>
     public StaticTenantAuthenticator(IReadOnlyDictionary<string, string> tokenToTenantId)
     {
         ArgumentNullException.ThrowIfNull(tokenToTenantId);

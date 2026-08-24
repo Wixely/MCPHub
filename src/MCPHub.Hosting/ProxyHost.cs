@@ -52,6 +52,7 @@ public sealed class ProxyHost
     private readonly SemaphoreSlim _gate = new(1, 1);
     private WebApplication? _app;
 
+    /// <summary>Creates a host around the given handlers; nothing binds until <see cref="StartAsync"/>.</summary>
     public ProxyHost(ProxyHandlers handlers, ILoggerFactory loggerFactory, ProxyHostOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(handlers);
@@ -61,13 +62,16 @@ public sealed class ProxyHost
         _logger = loggerFactory.CreateLogger<ProxyHost>();
     }
 
+    /// <summary>Whether the web application is currently started.</summary>
     public bool IsRunning => _app is not null;
 
+    /// <summary>Address the endpoint binds to (loopback by default).</summary>
     public string BindAddress { get; private set; } = "127.0.0.1";
 
     /// <summary>Listen port. Pass <c>0</c> to let the OS pick; reflects the actual port once started.</summary>
     public int Port { get; private set; } = 5800;
 
+    /// <summary>Full URL of the aggregated MCP endpoint, e.g. <c>http://127.0.0.1:5800/mcp</c>.</summary>
     public string EndpointUrl => $"http://{BindAddress}:{Port}/mcp";
 
     /// <summary>Sets the bind address/port to use (ignored while running).</summary>
@@ -79,6 +83,7 @@ public sealed class ProxyHost
         Port = port;
     }
 
+    /// <summary>Starts the endpoint on the given address/port (no-op if already running). Port 0 lets the OS pick.</summary>
     public async Task StartAsync(string bindAddress, int port, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
@@ -125,6 +130,7 @@ public sealed class ProxyHost
         }
     }
 
+    /// <summary>Stops and disposes the web application (no-op if not running).</summary>
     public async Task StopAsync()
     {
         await _gate.WaitAsync();
@@ -144,6 +150,7 @@ public sealed class ProxyHost
         }
     }
 
+    /// <summary>Stops (if running) and starts again on the given address/port.</summary>
     public async Task RestartAsync(string bindAddress, int port, CancellationToken cancellationToken = default)
     {
         await StopAsync();

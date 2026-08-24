@@ -3,6 +3,11 @@
   <PropertyGroup>
     <RootNamespace>MCPHub.Hosting</RootNamespace>
     <AssemblyName>MCPHub.Hosting</AssemblyName>
+    <MCPHubPackable>true</MCPHubPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PackageId>MCPHub.Hosting</PackageId>
+    <Description>In-process Kestrel host for MCPHub.Proxy: exposes one aggregated MCP endpoint (/mcp) with Start/Stop/Restart, loopback-default binding, optional bearer-token tenant authentication, and support for multiple hosts per process.</Description>
   </PropertyGroup>
 
   <!-- Library that hosts an in-process Kestrel/ASP.NET Core MCP endpoint. -->

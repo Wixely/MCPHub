@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   DOTNET_NOLOGO: 'true'
@@ -70,3 +71,27 @@ jobs:
         with:
           files: dist/*.zip
           generate_release_notes: true
+
+  # Publishes the three embeddable libraries (Proxy, Hosting, Processes) to the Wixely
+  # GitHub Packages NuGet feed. Consumers restore with a read:packages PAT against
+  # https://nuget.pkg.github.com/Wixely/index.json.
+  publish-packages:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET (pinned by global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Pack libraries
+        run: pwsh eng/PackLibraries.ps1 -CI
+
+      - name: Push to Wixely GitHub Packages feed
+        run: >
+          dotnet nuget push 'artifacts/packages/*.nupkg'
+          --source 'https://nuget.pkg.github.com/Wixely/index.json'
+          --api-key '${{ secrets.GITHUB_TOKEN }}'
+          --skip-duplicate

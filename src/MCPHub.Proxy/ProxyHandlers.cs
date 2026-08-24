@@ -21,11 +21,16 @@ public sealed class ProxyHandlers
     private readonly IProxyAuditSink _auditSink;
     private readonly ITenantResolver _tenantResolver;
 
+    /// <summary>Creates handlers with the single-user defaults: allow-all, no audit, default tenant.</summary>
     public ProxyHandlers(IUpstreamRegistry registry)
         : this(registry, null, null, null)
     {
     }
 
+    /// <summary>
+    /// Creates handlers with explicit policy. Any <see langword="null"/> falls back to the
+    /// single-user default (allow-all / no-op audit / every caller is <see cref="TenantContext.Default"/>).
+    /// </summary>
     public ProxyHandlers(
         IUpstreamRegistry registry,
         IToolAuthorization? authorization,
@@ -39,9 +44,11 @@ public sealed class ProxyHandlers
         _tenantResolver = tenantResolver ?? DefaultTenantResolver.Instance;
     }
 
+    /// <summary>MCP <c>tools/list</c> handler: resolves the caller's tenant and lists its visible tools.</summary>
     public ValueTask<ListToolsResult> ListToolsAsync(RequestContext<ListToolsRequestParams> context, CancellationToken cancellationToken)
         => ValueTask.FromResult(ListTools(_tenantResolver.Resolve(context.User)));
 
+    /// <summary>MCP <c>tools/call</c> handler: resolves the caller's tenant and routes the call.</summary>
     public async ValueTask<CallToolResult> CallToolAsync(RequestContext<CallToolRequestParams> context, CancellationToken cancellationToken)
         => await CallToolAsync(_tenantResolver.Resolve(context.User), context.Params, cancellationToken);
 

@@ -3,6 +3,11 @@
   <PropertyGroup>
     <RootNamespace>MCPHub.Processes</RootNamespace>
     <AssemblyName>MCPHub.Processes</AssemblyName>
+    <MCPHubPackable>true</MCPHubPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PackageId>MCPHub.Processes</PackageId>
+    <Description>Supervised launching of local MCP server executables: spec-driven start/stop with stdout/stderr capture, periodic health probing, Windows job-object kill-on-close so children die with the host, and a reader for each server's own config-declared port.</Description>
   </PropertyGroup>
 
   <ItemGroup>

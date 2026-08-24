@@ -1,0 +1,17 @@
+<Project>
+
+  <!-- Shared packaging conventions for the packable libraries (opt-in via MCPHubPackable). -->
+  <PropertyGroup Condition="'$(MCPHubPackable)' == 'true'">
+    <IsPackable>true</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MCPHubPackable)' == 'true'">
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

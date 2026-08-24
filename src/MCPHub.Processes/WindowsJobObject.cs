@@ -17,6 +17,7 @@ public sealed class WindowsJobObject : IDisposable
 
     private IntPtr _handle;
 
+    /// <summary>Creates the job object with the kill-on-close limit set.</summary>
     public WindowsJobObject()
     {
         _handle = CreateJobObject(IntPtr.Zero, null);
@@ -57,6 +58,7 @@ public sealed class WindowsJobObject : IDisposable
         }
     }
 
+    /// <summary>Closes the job handle, which kills every process still assigned to it.</summary>
     public void Dispose()
     {
         if (_handle != IntPtr.Zero)

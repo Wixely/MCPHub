@@ -3,6 +3,11 @@
   <PropertyGroup>
     <RootNamespace>MCPHub.Proxy</RootNamespace>
     <AssemblyName>MCPHub.Proxy</AssemblyName>
+    <MCPHubPackable>true</MCPHubPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PackageId>MCPHub.Proxy</PackageId>
+    <Description>Embeddable MCP aggregation core: an upstream MCP client pool (HTTP and stdio), an atomically swapped namespaced tool catalog, routing handlers, and a multi-tenant authorization + audit seam (per-tenant tools/list filtering, call authorization, digest-only audit events).</Description>
   </PropertyGroup>
 
   <ItemGroup>

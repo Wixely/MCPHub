@@ -38,6 +38,7 @@ public sealed record ToolCallAuditEvent(
 /// </summary>
 public interface IProxyAuditSink
 {
+    /// <summary>Records one completed (or refused) tool call.</summary>
     void Record(ToolCallAuditEvent auditEvent);
 }
 

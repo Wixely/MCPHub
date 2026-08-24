@@ -26,6 +26,7 @@ public sealed class StaticToolAuthorization : IToolAuthorization
 {
     private readonly Dictionary<string, Regex[]> _grants;
 
+    /// <summary>Compiles the options' grant patterns; the instance is immutable and thread-safe.</summary>
     public StaticToolAuthorization(StaticToolAuthorizationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

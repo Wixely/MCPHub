@@ -17,6 +17,7 @@ public sealed record TenantContext
     /// </summary>
     public static readonly TenantContext Default = new(DefaultTenantId);
 
+    /// <summary>Creates a tenant context for <paramref name="tenantId"/> (must be non-blank).</summary>
     public TenantContext(string tenantId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
