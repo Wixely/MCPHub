@@ -171,7 +171,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
                 {
                     var exposedName = upstream.Key + ProxyConstants.NamespaceSeparator + tool.Name;
                     tools.Add(NamespaceTool(tool, exposedName, upstream.DisplayName));
-                    routes[exposedName] = new ToolRoute(upstream.Client, tool.Name);
+                    routes[exposedName] = new ToolRoute(upstream.Client, tool.Name, upstream.Key);
                 }
             }
             catch (Exception ex)

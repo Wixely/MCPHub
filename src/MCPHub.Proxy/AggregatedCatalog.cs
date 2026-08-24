@@ -3,8 +3,11 @@ using ModelContextProtocol.Protocol;
 
 namespace MCPHub.Proxy;
 
-/// <summary>Where an exposed (namespaced) tool routes to: the owning client and its original tool name.</summary>
-public sealed record ToolRoute(McpClient Client, string OriginalName);
+/// <summary>
+/// Where an exposed (namespaced) tool routes to: the owning client, its original tool name, and the
+/// upstream's key (the namespace prefix — carried so authorization can grant per upstream server).
+/// </summary>
+public sealed record ToolRoute(McpClient Client, string OriginalName, string ServerKey);
 
 /// <summary>
 /// Immutable snapshot of the aggregated tool set across all connected upstreams: the namespaced tools
