@@ -33,9 +33,22 @@
                  TextTrimming="CharacterEllipsis"/>
     </Grid>
 
+    <!-- Search: narrows the list as you type -->
+    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="*,Auto,Auto">
+      <TextBox Grid.Column="0"
+               Watermark="Search servers by name…"
+               Text="{Binding FilterText}"
+               ToolTip.Tip="Matches the display name or the product name, e.g. 'mail' or 'mailcal'"/>
+      <Button Grid.Column="1" Content="Clear" Margin="8,0,0,0"
+              Command="{Binding ClearFilterCommand}"
+              IsVisible="{Binding FilterText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Grid.Column="2" Text="{Binding FilterSummary}"
+                 Margin="12,0,0,0" VerticalAlignment="Center" Opacity="0.6"/>
+    </Grid>
+
     <!-- Column header -->
     <Border DockPanel.Dock="Top" Background="#14000000" CornerRadius="6,6,0,0" Padding="14,9">
-      <Grid ColumnDefinitions="*,52,80,88,96,52,344">
+      <Grid ColumnDefinitions="*,52,80,88,96,52,354">
         <TextBlock Grid.Column="0" Text="Service" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="1" Text="Port" FontWeight="SemiBold"/>
         <TextBlock Grid.Column="2" Text="Installed" FontWeight="SemiBold"/>
@@ -46,12 +59,17 @@
       </Grid>
     </Border>
 
+    <!-- Shown instead of an unexplained empty list when the filter matches nothing -->
+    <TextBlock DockPanel.Dock="Top" Margin="14,16,0,0" Opacity="0.6"
+               IsVisible="{Binding HasNoMatches}"
+               Text="No servers match that name."/>
+
     <ScrollViewer>
-      <ItemsControl ItemsSource="{Binding Services}">
+      <ItemsControl ItemsSource="{Binding FilteredServices}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ManagedServiceViewModel">
             <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,8">
-              <Grid ColumnDefinitions="*,52,80,88,96,52,344" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="*,52,80,88,96,52,354" VerticalAlignment="Center">
 
                 <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0">
                   <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
@@ -86,10 +104,34 @@
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                               IsVisible="{Binding !IsInstalling}">
                     <Button Content="{Binding InstallButtonText}" Width="84" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding InstallCommand}"/>
-                    <Button Content="Start" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
+                    <Button Content="{Binding StartButtonText}" Width="66" HorizontalContentAlignment="Center" Padding="8,4"
+                            Command="{Binding StartOrRestartCommand}" IsEnabled="{Binding CanStartOrRestart}"
+                            ToolTip.Tip="Start the service, or stop and start it again if it's already running"/>
                     <Button Content="Stop" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
-                    <Button Content="Config" Width="64" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding EditConfigCommand}"
+                    <!-- Single-config services: opens {Name}.json directly. -->
+                    <Button Content="Config" Width="64" HorizontalContentAlignment="Center" Padding="8,4"
+                            IsVisible="{Binding !HasExtraConfigs}"
+                            Command="{Binding EditConfigCommand}"
                             IsEnabled="{Binding CanEditConfig}" ToolTip.Tip="{Binding ConfigFileName}"/>
+
+                    <!-- Multi-config services (e.g. Remote Admin): pick which file to open. -->
+                    <Button Content="Config ⌄" Width="64" HorizontalContentAlignment="Center" Padding="8,4"
+                            IsVisible="{Binding HasExtraConfigs}"
+                            IsEnabled="{Binding CanOpenConfigMenu}"
+                            ToolTip.Tip="This service reads several config files">
+                      <Button.Flyout>
+                        <MenuFlyout ItemsSource="{Binding ConfigFiles}">
+                          <MenuFlyout.ItemContainerTheme>
+                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                          x:DataType="vm:ConfigFileViewModel">
+                              <Setter Property="Header" Value="{Binding DisplayName}"/>
+                              <Setter Property="Command" Value="{Binding OpenCommand}"/>
+                              <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}"/>
+                            </ControlTheme>
+                          </MenuFlyout.ItemContainerTheme>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
                     <Button Content="Logs" Width="56" HorizontalContentAlignment="Center" Padding="8,4" Command="{Binding ViewLogsCommand}"/>
                   </StackPanel>
                   <ProgressBar IsVisible="{Binding IsInstalling}" Minimum="0" Maximum="1"

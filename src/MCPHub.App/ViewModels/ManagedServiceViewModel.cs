@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using MCPHub.App.Messages;
+using MCPHub.Core.Catalog;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Services;
@@ -30,6 +33,10 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
     [ObservableProperty]
     private double _installProgress;
 
+    /// <summary>True between the stop and the start of a restart, so the button can't be re-entered.</summary>
+    [ObservableProperty]
+    private bool _isRestarting;
+
     /// <summary>When checked, MCPHub starts this service automatically on launch.</summary>
     [ObservableProperty]
     private bool _autoRun;
@@ -41,6 +48,13 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         _processHost = processHost;
         _settings = settings;
         _autoRun = settings.Current.AutoStartServices.Contains(Name);
+        BuildConfigFiles();
+    }
+
+    partial void OnIsRestartingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanStartOrRestart));
+        OnPropertyChanged(nameof(StartButtonText));
     }
 
     /// <summary>Persists the auto-run choice whenever the checkbox is toggled.</summary>
@@ -62,6 +76,9 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         await _processHost.StartAsync(_model);
         SyncFromModel();
     }
+
+    /// <summary>Whether this service matches the services-list search box. See ServiceCatalogEntry.</summary>
+    public bool MatchesSearch(string? term) => _model.Catalog.MatchesSearch(term);
 
     public string Name => _model.Catalog.Name;
     public string DisplayName => _model.Catalog.DisplayName;
@@ -87,15 +104,52 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
 
     public bool CanStop => _model.RunState is ServiceRunState.Starting or ServiceRunState.Running or ServiceRunState.Unhealthy;
 
+    /// <summary>
+    /// The primary run button is enabled whenever the service is installed and not mid-restart —
+    /// it starts a stopped service and restarts a running one.
+    /// </summary>
+    public bool CanStartOrRestart => _model.IsInstalled && !IsRestarting && (CanStart || CanStop);
+
+    /// <summary>"Restart" once the service is up, otherwise "Start".</summary>
+    public string StartButtonText => IsRestarting ? "…" : CanStop ? "Restart" : "Start";
+
     public string InstallButtonText => !_model.IsInstalled
         ? "Install"
         : _model.UpdateStatus == UpdateStatus.UpdateAvailable ? "Update" : "Reinstall";
 
-    /// <summary>The config file edited by <see cref="EditConfigCommand"/>, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
+    /// <summary>The service's own config file, e.g. <c>NoteworthyMCPSharp.json</c>.</summary>
     public string ConfigFileName => _model.Catalog.ConfigFileName;
 
     /// <summary>Whether a config file exists to edit (it ships with the install).</summary>
     public bool CanEditConfig => File.Exists(_model.ConfigPath);
+
+    /// <summary>True when this service reads more than one config file, so the button gets a menu.</summary>
+    public bool HasExtraConfigs => _model.Catalog.HasExtraConfigFiles;
+
+    /// <summary>The dropdown is available as soon as the service is installed — an extra config
+    /// file that does not exist yet is created from its template when picked.</summary>
+    public bool CanOpenConfigMenu => _model.IsInstalled;
+
+    /// <summary>Every config file for this service, primary first. Empty unless <see cref="HasExtraConfigs"/>.</summary>
+    public IReadOnlyList<ConfigFileViewModel> ConfigFiles { get; private set; } = [];
+
+    private void BuildConfigFiles()
+    {
+        var catalog = _model.Catalog;
+        if (!catalog.HasExtraConfigFiles)
+        {
+            ConfigFiles = [];
+            return;
+        }
+
+        ConfigFiles = catalog.AllConfigFileNames
+            .Select(f => new ConfigFileViewModel(
+                f,
+                ConfigFileResolver.DescribeFileName(f, catalog.Name),
+                isPrimary: string.Equals(f, catalog.ConfigFileName, StringComparison.OrdinalIgnoreCase),
+                OpenConfigFile))
+            .ToList();
+    }
 
     /// <summary>Checks GitHub for this service's latest release and refreshes the row.</summary>
     [RelayCommand]
@@ -125,15 +179,40 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         return hit;
     }
 
-    /// <summary>Starts the service hidden; run-state then advances via health probes.</summary>
+    /// <summary>
+    /// Starts a stopped service, or restarts a running one (stop, then start).
+    ///
+    /// Restarting is the common case after editing a config file, and doing it as Stop-then-Start
+    /// left the row briefly looking idle and made a double-click easy — hence the single button and
+    /// the <see cref="IsRestarting"/> guard.
+    /// </summary>
     [RelayCommand]
-    private async Task StartAsync()
+    private async Task StartOrRestartAsync()
     {
-        if (!CanStart)
+        if (IsRestarting || !CanStartOrRestart)
             return;
 
-        await _processHost.StartAsync(_model);
-        SyncFromModel();
+        var wasRunning = CanStop;
+        IsRestarting = true;
+        try
+        {
+            if (wasRunning)
+            {
+                await _processHost.StopAsync(_model);
+                SyncFromModel();
+            }
+
+            // A stop that faulted leaves the service unable to start; don't paper over it.
+            if (!CanStart)
+                return;
+
+            await _processHost.StartAsync(_model);
+        }
+        finally
+        {
+            IsRestarting = false;
+            SyncFromModel();
+        }
     }
 
     /// <summary>Stops the running service.</summary>
@@ -187,22 +266,35 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Opens this service's <c>{Name}.json</c> config in the OS default editor.</summary>
+    /// <summary>Opens this service's own <c>{Name}.json</c> config in the OS default editor.</summary>
     [RelayCommand]
-    private void EditConfig()
+    private void EditConfig() => OpenConfigFile(_model.Catalog.ConfigFileName);
+
+    /// <summary>
+    /// Opens one of this service's config files, creating it from its shipped <c>.example</c>
+    /// template if this is the first time it has been asked for.
+    /// </summary>
+    private void OpenConfigFile(string fileName)
     {
-        var path = _model.ConfigPath;
-        if (!File.Exists(path))
+        var resolution = ConfigFileResolver.Resolve(_model.InstallFolder, fileName);
+        if (!resolution.Exists || resolution.Path is null)
+        {
+            Debug.WriteLine($"No config file or template for '{fileName}' in '{_model.InstallFolder}'.");
             return;
+        }
 
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(resolution.Path) { UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open config '{path}': {ex.Message}");
+            Debug.WriteLine($"Failed to open config '{resolution.Path}': {ex.Message}");
         }
+
+        // A promoted template is a new file on disk, so the primary-config check may have flipped.
+        if (resolution.Outcome == ConfigFileOutcome.CreatedFromExample)
+            OnPropertyChanged(nameof(CanEditConfig));
     }
 
     /// <summary>Switches to the Logs page focused on this service.</summary>
@@ -221,7 +313,10 @@ public sealed partial class ManagedServiceViewModel : ViewModelBase
         OnPropertyChanged(nameof(UpdateStatusText));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(CanStartOrRestart));
+        OnPropertyChanged(nameof(StartButtonText));
         OnPropertyChanged(nameof(InstallButtonText));
         OnPropertyChanged(nameof(CanEditConfig));
+        OnPropertyChanged(nameof(CanOpenConfigMenu));
     }
 }

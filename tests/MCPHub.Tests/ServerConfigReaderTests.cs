@@ -64,6 +64,54 @@ public class ServerConfigReaderTests
         finally { File.Delete(path); }
     }
 
+    // The shapes below are taken from the configs the suite actually ships. Because DefaultPort is
+    // now null for every product, ReadPort is the only thing standing between a service and a
+    // working health check — so the awkward real-world formatting is pinned here.
+
+    [Fact]
+    public void Reads_a_port_written_with_extra_whitespace_after_the_colon()
+    {
+        // NoteworthyMCPSharp.json is emitted with aligned values: "Port":  5711
+        var path = WriteTemp("{\n  \"Server\": {\n                   \"Port\":  5711\n  }\n}");
+        try { Assert.Equal(5711, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Reads_a_config_saved_with_a_utf8_bom()
+    {
+        // Anything edited in Notepad comes back with a BOM.
+        var path = Path.Combine(Path.GetTempPath(), "mcphub-bom-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, """{ "Server": { "Port": 5716 } }""", new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        try { Assert.Equal(5716, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Reads_a_config_containing_comments_and_a_trailing_comma()
+    {
+        var path = WriteTemp("""
+            {
+              // hand-edited
+              "Server": {
+                "Host": "localhost",
+                "Port": 5717,
+              }
+            }
+            """);
+        try { Assert.Equal(5717, ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Invalid_json_returns_null_rather_than_throwing()
+    {
+        // A half-edited config must not take the app down; the caller logs and shows no port.
+        var path = WriteTemp("""{ "Server": { "Port": 5701 """);
+        try { Assert.Null(ServerConfigReader.ReadPort(path)); }
+        finally { File.Delete(path); }
+    }
+
     private static string WriteTemp(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), "mcphub-cfg-" + Guid.NewGuid().ToString("N") + ".json");
