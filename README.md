@@ -165,12 +165,19 @@ MCPHub updates itself the same way from the **Updates** page.
 | Installed servers | The *Shared servers folder* from Settings |
 | Your settings | Your user config folder, under `MCPHub` |
 | Logs | Beside the installed servers, in `logs` |
+| Single-instance lock | `mcphub.lock` in your user data folder |
 
 Each server keeps its config in a `<ServerName>.json` next to its executable, so updating never overwrites your settings.
 
 ## Troubleshooting
 
 **A server won't start.** Open **Logs**, pick that server, and read the last few lines. The usual causes are a missing setting in its config or a port already in use.
+
+**MCPHub won't open and no window appears.** It is already running — check the notification area for the tray icon, since **Close to tray** keeps it alive after you close the window. Only one MCPHub may run at a time: it binds a fixed proxy port, starts each service on its own fixed port, and writes to a shared servers folder, so a second instance would fight the first for all three. A second launch exits immediately with code `2` and explains itself on standard error, which you will see if you started it from a terminal.
+
+If you genuinely want another instance — testing a new build against an old one, say — pass `--allow-multiple-instances`. Nothing else is changed by that switch: both instances will still compete for the proxy port and the servers folder, so point the second one at a different port and folder in **Settings** first.
+
+The lock is an exclusive lock the operating system holds on `mcphub.lock` for as long as the process lives. It is released even if MCPHub is killed, so a leftover `mcphub.lock` file never blocks a restart and should not be deleted by hand.
 
 **Two servers fighting over a port.** Each server's port lives in its own JSON under `Server` → `Port`. Change one, then stop and start it.
 
