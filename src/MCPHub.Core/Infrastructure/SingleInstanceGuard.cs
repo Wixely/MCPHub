@@ -15,6 +15,22 @@ namespace MCPHub.Core.Infrastructure;
 /// kill or a power loss, so there is no stale lock to detect and no PID to second-guess.
 /// </para>
 /// </summary>
+/// <summary>Result of <see cref="SingleInstanceGuard.Acquire"/>.</summary>
+public enum SingleInstanceOutcome
+{
+    /// <summary>This process now owns the lock.</summary>
+    Acquired,
+
+    /// <summary>Another process holds the lock: an MCPHub is already running.</summary>
+    AlreadyHeld,
+
+    /// <summary>
+    /// The lock file could not be created or opened for reasons unrelated to another instance
+    /// (unwritable data directory, permissions). Nothing is known about other instances.
+    /// </summary>
+    LockUnavailable,
+}
+
 public sealed class SingleInstanceGuard : IDisposable
 {
     /// <summary>Name of the lock file within the per-user data directory.</summary>
@@ -45,6 +61,15 @@ public sealed class SingleInstanceGuard : IDisposable
     /// </summary>
     /// <returns><see langword="true"/> when this process now owns the lock.</returns>
     public static bool TryAcquire(string lockFilePath, out SingleInstanceGuard? guard)
+        => Acquire(lockFilePath, out guard) == SingleInstanceOutcome.Acquired;
+
+    /// <summary>
+    /// Like <see cref="TryAcquire"/>, but tells the caller <em>why</em> it did not get the lock:
+    /// another instance holds it, or the lock could not be created at all. The two deserve different
+    /// responses — refuse to start, versus start unguarded with a warning — and collapsing them into
+    /// one <see langword="false"/> made an unwritable data directory read as "already running".
+    /// </summary>
+    public static SingleInstanceOutcome Acquire(string lockFilePath, out SingleInstanceGuard? guard)
     {
         guard = null;
 
@@ -59,7 +84,7 @@ public sealed class SingleInstanceGuard : IDisposable
             {
                 // Nowhere to put the lock. Refusing here would make MCPHub unstartable on a
                 // machine where the data directory is unwritable, which is the worse failure.
-                return false;
+                return SingleInstanceOutcome.LockUnavailable;
             }
         }
 
@@ -70,14 +95,20 @@ public sealed class SingleInstanceGuard : IDisposable
             // on Unix. Anyone else asking for the same file is refused until this handle closes.
             stream = new FileStream(lockFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException)
         {
-            return false;
+            // Sharing violation on Windows, EWOULDBLOCK from flock on Unix: someone holds it.
+            return SingleInstanceOutcome.AlreadyHeld;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Permissions, not contention: the file exists but this account may not open it for writing.
+            return SingleInstanceOutcome.LockUnavailable;
         }
 
         StampHolder(stream);
         guard = new SingleInstanceGuard(stream);
-        return true;
+        return SingleInstanceOutcome.Acquired;
     }
 
     /// <summary>Releases the lock, letting the next MCPHub start.</summary>
