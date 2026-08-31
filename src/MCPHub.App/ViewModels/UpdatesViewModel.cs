@@ -102,6 +102,21 @@ public sealed partial class UpdatesViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Opens the folder holding the running executable, where the downloaded build gets swapped in.</summary>
+    [RelayCommand]
+    private void OpenInstallFolder()
+    {
+        var folder = System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+        try
+        {
+            Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Couldn't open the install folder: " + ex.Message;
+        }
+    }
+
     /// <summary>Opens GitHub's newest-release page in the default browser, for a manual download.</summary>
     [RelayCommand]
     private void OpenReleasePage()
