@@ -57,7 +57,7 @@ public sealed partial class ServicesViewModel : ViewModelBase
     /// <summary>True when a filter is active but nothing matches, so the list can explain itself.</summary>
     public bool HasNoMatches => FilteredServices.Count == 0 && Services.Count > 0;
 
-    /// <summary>e.g. "3 of 17 servers" while filtering; empty when showing everything.</summary>
+    /// <summary>e.g. "3 of 20 servers" while filtering; empty when showing everything.</summary>
     public string FilterSummary => FilterText.Trim().Length == 0
         ? string.Empty
         : $"{FilteredServices.Count} of {Services.Count} servers";

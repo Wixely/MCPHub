@@ -1,12 +1,15 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 17 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 20 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
 /// Most products live in a repo named after the product. The exception is <c>RepoDetoxMCPSharp</c>,
 /// whose HTTP MCP server ships inside the multi-app <c>RepoDetox</c> repo (alongside a CLI and GUI),
 /// so its <c>RepoName</c> differs from its <c>Name</c> and it is published self-contained only.
+/// <c>ADBMCPSharp</c> and <c>KodiMCPSharp</c> follow the standard repo/exe/config naming but ship a
+/// single self-contained asset per OS with no flavour token, so they carry an
+/// <see cref="ServiceCatalogEntry.AssetFileNameOverride"/> that ignores the requested flavour.
 ///
 /// <para>
 /// Every product's <c>DefaultPort</c> is <see langword="null"/> on purpose: the effective port is read
@@ -81,6 +84,29 @@ public static class ServiceCatalog
 
         new("ComfyUIMCPSharp", "Wixely", "ComfyUIMCPSharp",
             "ComfyUI", "ComfyUI image generation (queue, live progress, images) MCP server", null, "COMFYUIMCP_"),
+
+        new("BambuMCPSharp", "Wixely", "BambuMCPSharp",
+            "Bambu Lab", "Bambu Lab X1-series 3D printer (LAN mode: status, control, camera) MCP server", null, "BAMBUMCP_"),
+
+        // Ships one self-contained asset per OS named {Name}-v{ver}-{os}-x64.zip (also arm64, which
+        // MCPHub does not select) — no flavour token, so the flavour setting is ignored.
+        new("KodiMCPSharp", "Wixely", "KodiMCPSharp",
+            "Kodi", "Kodi media centre (read-first browse & guarded playback control) MCP server", null, "KODIMCP_",
+            AssetFileNameOverride: static (os, _flavor, tag) => $"KodiMCPSharp-v{tag.TrimStart('v')}-{os}-x64.zip"),
+
+        // Ships one self-contained asset per OS named {Name}-{ver}-{os}-x64 — no "v" prefix and no
+        // flavour token. Linux is .tar.gz, which DownloadService cannot extract yet (same as Slopworks),
+        // so Windows is what's wired. The archive nests everything under a versioned folder;
+        // DownloadService finds the exe at any depth so that is fine.
+        new("ADBMCPSharp", "Wixely", "ADBMCPSharp",
+            "ADB", "Android Debug Bridge (guarded device inspection & control) MCP server", null, "ADBMCP_",
+            AssetFileNameOverride: static (os, _flavor, tag) =>
+            {
+                var trimmed = tag.TrimStart('v');
+                return os == "win"
+                    ? $"ADBMCPSharp-{trimmed}-win-x64.zip"
+                    : $"ADBMCPSharp-{trimmed}-linux-x64.tar.gz";
+            }),
 
         // Non-standard: RepoDetoxMCPSharp is one of three apps (CLI, GUI, MCP) shipped from the
         // "RepoDetox" repo, so RepoName ≠ Name. Published self-contained only; port read from config.
