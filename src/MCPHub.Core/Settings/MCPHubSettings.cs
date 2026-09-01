@@ -109,4 +109,20 @@ public sealed class MCPHubSettings
     /// Overridable with <c>MCPHUB_RECIPES_AGENT_EDIT</c>.
     /// </summary>
     public bool RecipesAgentEditEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Whether agents get the <c>mcphub__*</c> management tools at all (list servers, and whichever of the three
+    /// capabilities below are on). Off by default: an agent installing binaries and starting processes is
+    /// something the user opts into. Overridable with <c>MCPHUB_AGENT_MANAGEMENT_ENABLED</c>.
+    /// </summary>
+    public bool AgentManagementEnabled { get; set; }
+
+    /// <summary>Agents may start, stop and restart managed servers. Overridable with <c>MCPHUB_AGENT_MANAGEMENT_CONTROL</c>.</summary>
+    public bool AgentManagementControlEnabled { get; set; } = true;
+
+    /// <summary>Agents may install managed servers and apply updates. Overridable with <c>MCPHUB_AGENT_MANAGEMENT_INSTALL</c>.</summary>
+    public bool AgentManagementInstallEnabled { get; set; } = true;
+
+    /// <summary>Agents may check GitHub for server releases and for MCPHub itself. Overridable with <c>MCPHUB_AGENT_MANAGEMENT_UPDATE_CHECKS</c>.</summary>
+    public bool AgentManagementUpdateChecksEnabled { get; set; } = true;
 }

@@ -39,6 +39,27 @@
       </StackPanel>
 
       <StackPanel Spacing="6">
+        <TextBlock Text="Agent management" FontWeight="SemiBold"/>
+        <TextBlock Text="Lets agents connected to the proxy manage the servers on the Services page through mcphub__* tools. These switches apply immediately (no Save needed). Server config files and logs are never exposed to agents."
+                   Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+        <CheckBox IsChecked="{Binding AgentManagementEnabled}" IsEnabled="{Binding CanToggleAgentManagement}"
+                  Content="Let agents manage servers (always includes mcphub__list_services)"
+                  ToolTip.Tip="Off hides every mcphub__* tool from the proxy. Headless: MCPHUB_AGENT_MANAGEMENT_ENABLED=true"/>
+        <StackPanel Margin="28,0,0,0" Spacing="4">
+          <CheckBox IsChecked="{Binding AgentControlEnabled}" IsEnabled="{Binding CanToggleAgentControl}"
+                    Content="Start, stop and restart servers"
+                    ToolTip.Tip="mcphub__start / mcphub__stop / mcphub__restart. Headless: MCPHUB_AGENT_MANAGEMENT_CONTROL=false"/>
+          <CheckBox IsChecked="{Binding AgentInstallEnabled}" IsEnabled="{Binding CanToggleAgentInstall}"
+                    Content="Install and update servers"
+                    ToolTip.Tip="mcphub__install / mcphub__update. Headless: MCPHUB_AGENT_MANAGEMENT_INSTALL=false"/>
+          <CheckBox IsChecked="{Binding AgentUpdateChecksEnabled}" IsEnabled="{Binding CanToggleAgentUpdateChecks}"
+                    Content="Check GitHub for server and MCPHub updates"
+                    ToolTip.Tip="mcphub__check_service_updates / mcphub__check_hub_update. Headless: MCPHUB_AGENT_MANAGEMENT_UPDATE_CHECKS=false"/>
+        </StackPanel>
+        <TextBlock Text="{Binding AgentManagementSummary}" Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
         <TextBlock Text="System tray (Windows)" FontWeight="SemiBold"/>
         <CheckBox IsChecked="{Binding MinimizeToTray}" Content="Minimizing the window hides it to the tray"/>
         <CheckBox IsChecked="{Binding CloseToTray}" Content="Closing the window hides to the tray instead of exiting"/>
