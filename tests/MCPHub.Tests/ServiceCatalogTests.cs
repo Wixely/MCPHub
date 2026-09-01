@@ -6,9 +6,9 @@ namespace MCPHub.Tests;
 public class ServiceCatalogTests
 {
     [Fact]
-    public void Catalog_contains_all_seventeen_products()
+    public void Catalog_contains_all_twenty_products()
     {
-        Assert.Equal(17, ServiceCatalog.All.Count);
+        Assert.Equal(20, ServiceCatalog.All.Count);
     }
 
     [Fact]
@@ -44,6 +44,51 @@ public class ServiceCatalogTests
         Assert.Equal("PortainerMCPSharp.json", entry.ConfigFileName);
         Assert.Equal("PortainerMCPSharp-win-x64-self-contained-v0.1.0.zip",
             entry.AssetFileName("win", "self-contained", "v0.1.0"));
+    }
+
+    [Fact]
+    public void Bambu_follows_the_standard_naming_convention()
+    {
+        var entry = ServiceCatalog.FindByName("BambuMCPSharp");
+
+        Assert.NotNull(entry);
+        Assert.Equal("BambuMCPSharp", entry!.RepoName);
+        Assert.Equal("BAMBUMCP_", entry.EnvPrefix);
+        Assert.Equal("bambu", entry.Key);
+        Assert.Equal("BambuMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("BambuMCPSharp-win-x64-self-contained-v0.1.0.zip",
+            entry.AssetFileName("win", "self-contained", "v0.1.0"));
+        Assert.Equal("BambuMCPSharp-linux-x64-framework-dependent-v0.1.0.zip",
+            entry.AssetFileName("linux", "framework-dependent", "v0.1.0"));
+    }
+
+    [Fact]
+    public void Kodi_ships_one_flavourless_asset_per_os()
+    {
+        // Release assets are KodiMCPSharp-v0.1.1-{os}-{arch}.zip: version first, no flavour token.
+        // Whatever flavour the user picked in Settings must resolve to the same self-contained zip.
+        var entry = ServiceCatalog.FindByName("KodiMCPSharp")!;
+
+        Assert.Equal("KODIMCP_", entry.EnvPrefix);
+        Assert.Equal("kodi", entry.Key);
+        Assert.Equal("KodiMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("KodiMCPSharp-v0.1.1-win-x64.zip", entry.AssetFileName("win", "self-contained", "v0.1.1"));
+        Assert.Equal("KodiMCPSharp-v0.1.1-win-x64.zip", entry.AssetFileName("win", "framework-dependent", "0.1.1"));
+        Assert.Equal("KodiMCPSharp-v0.1.1-linux-x64.zip", entry.AssetFileName("linux", "self-contained", "v0.1.1"));
+    }
+
+    [Fact]
+    public void Adb_ships_one_flavourless_asset_per_os_without_a_v_prefix()
+    {
+        // Release assets are ADBMCPSharp-0.1.1-win-x64.zip and ADBMCPSharp-0.1.1-linux-x64.tar.gz.
+        var entry = ServiceCatalog.FindByName("ADBMCPSharp")!;
+
+        Assert.Equal("ADBMCP_", entry.EnvPrefix);
+        Assert.Equal("adb", entry.Key);
+        Assert.Equal("ADBMCPSharp.json", entry.ConfigFileName);
+        Assert.Equal("ADBMCPSharp-0.1.1-win-x64.zip", entry.AssetFileName("win", "self-contained", "v0.1.1"));
+        Assert.Equal("ADBMCPSharp-0.1.1-win-x64.zip", entry.AssetFileName("win", "framework-dependent", "0.1.1"));
+        Assert.Equal("ADBMCPSharp-0.1.1-linux-x64.tar.gz", entry.AssetFileName("linux", "self-contained", "v0.1.1"));
     }
 
     [Fact]

@@ -24,6 +24,31 @@ var handlers = new ProxyHandlers(registry);   // allow-all, no audit — single-
 with capped exponential backoff. Multiple registries (and hosts) per process are supported — there
 is no static mutable state.
 
+## In-process tools
+
+Tools implemented inside the proxy process — not by an upstream server — plug in through
+`ILocalToolProvider`. They are namespaced, authorized and audited exactly like upstream tools, under
+the provider's `Key` as the server key:
+
+```csharp
+sealed class ClockTools : ILocalToolProvider
+{
+    public string Key => "clock";
+    public string DisplayName => "Clock";
+    public IReadOnlyList<Tool> Tools { get; } = [new Tool { Name = "now", Description = "Current UTC time." }];
+
+    public ValueTask<CallToolResult> CallAsync(string toolName, IReadOnlyDictionary<string, JsonElement>? arguments, CancellationToken ct)
+        => ValueTask.FromResult(new CallToolResult { Content = [new TextContentBlock { Text = DateTimeOffset.UtcNow.ToString("O") }] });
+}
+
+var handlers = new ProxyHandlers(registry, authorization: null, localToolProviders: [new ClockTools()]);
+// tools/list now includes "clock__now"; a tenant needs a grant matching "clock" (or "clock__now") to see it.
+```
+
+A provider's tool set is read once at construction and must stay fixed. Local tools are resolved
+before upstreams, so a local key shadows an upstream of the same key. MCPHub uses this for its
+recipes knowledge base (`recipes__*`).
+
 ## Multi-tenant mode
 
 Tenancy is opt-in via the second constructor:

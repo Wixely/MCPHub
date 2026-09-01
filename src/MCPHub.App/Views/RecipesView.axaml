@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="640"
+             x:Class="MCPHub.App.Views.RecipesView"
+             x:DataType="vm:RecipesViewModel">
+
+  <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+
+    <!-- Header -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0" Spacing="2">
+        <TextBlock Text="Recipes" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Opacity="0.65" TextWrapping="Wrap"
+                   Text="Short 'if X then Y' notes on how to combine servers to finish a task no single server can. Agents read and write these through the proxy (recipes__list, recipes__add, …); you can curate them here."/>
+      </StackPanel>
+      <Button Grid.Column="1" Content="New recipe" Command="{Binding NewCommand}" VerticalAlignment="Top" Margin="16,0,0,0"/>
+    </Grid>
+
+    <!-- Agent access -->
+    <Border Grid.Row="1" Background="#14000000" CornerRadius="8" Padding="14,10">
+      <StackPanel Spacing="6">
+        <StackPanel Orientation="Horizontal" Spacing="24">
+          <CheckBox IsChecked="{Binding AgentsEnabled}" IsEnabled="{Binding CanToggleAgentsEnabled}"
+                    Content="Let agents use recipes"
+                    ToolTip.Tip="Off hides every recipes__* tool from the proxy. Headless: MCPHUB_RECIPES_ENABLED=false"/>
+          <CheckBox IsChecked="{Binding AgentsMayEdit}" IsEnabled="{Binding CanToggleAgentsMayEdit}"
+                    Content="Let agents add and edit recipes"
+                    ToolTip.Tip="Off leaves agents recipes__list and recipes__get only. Headless: MCPHUB_RECIPES_AGENT_EDIT=false"/>
+        </StackPanel>
+        <TextBlock Text="{Binding AccessSummary}" Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+
+    <!-- Body: list | editor -->
+    <Grid Grid.Row="2" ColumnDefinitions="360,*" ColumnSpacing="18">
+
+      <!-- List -->
+      <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+        <TextBox Grid.Row="0" Text="{Binding FilterText}" Watermark="Search recipes…"/>
+        <TextBlock Grid.Row="1" Text="{Binding CountSummary}" Opacity="0.6" FontSize="12" Margin="2,6,0,6"/>
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding Recipes}" SelectedItem="{Binding Selected}"
+                 Background="Transparent" Padding="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:RecipeRowViewModel">
+              <StackPanel Spacing="3" Margin="4,6">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding ServicesText}" FontSize="11" Opacity="0.55" IsVisible="{Binding HasServices}"
+                             FontFamily="Cascadia Mono,Consolas,monospace"/>
+                  <TextBlock Text="{Binding Meta}" FontSize="11" Opacity="0.45"/>
+                </StackPanel>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock Grid.Row="2" Opacity="0.55" FontSize="12" TextWrapping="Wrap" Margin="4,8" VerticalAlignment="Top"
+                   IsVisible="{Binding !HasRecipes}"
+                   Text="No recipes yet. Add one here, or let an agent save one with recipes__add when it works out how two servers fit together."/>
+      </Grid>
+
+      <!-- Editor -->
+      <Border Grid.Column="1" Background="#14000000" CornerRadius="8" Padding="18">
+        <Grid>
+
+          <!-- Empty state -->
+          <StackPanel Spacing="10" MaxWidth="560" HorizontalAlignment="Left" VerticalAlignment="Top"
+                      IsVisible="{Binding !IsEditing}">
+            <TextBlock Text="What makes a good recipe" FontWeight="SemiBold"/>
+            <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                       Text="One condition, one action. Name the servers and tools involved so an agent can act without guessing. Example:"/>
+            <Border Background="#0D1117" CornerRadius="6" Padding="12">
+              <StackPanel Spacing="4">
+                <TextBlock Foreground="#9DA5B4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Text="Title:    Access Kodi"/>
+                <TextBlock Foreground="#9DA5B4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" TextWrapping="Wrap" Text="When:     kodi__* tools fail because Kodi is not running"/>
+                <TextBlock Foreground="#9DA5B4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" TextWrapping="Wrap" Text="Then:     On Android, launch Kodi with adb__launch_app; on Windows/Linux, start it with remoteadmin; wait a few seconds, then retry."/>
+                <TextBlock Foreground="#9DA5B4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Text="Services: kodi, adb, remoteadmin"/>
+              </StackPanel>
+            </Border>
+            <TextBlock TextWrapping="Wrap" Opacity="0.6" FontSize="12"
+                       Text="Select a recipe on the left to edit it, or click New recipe."/>
+          </StackPanel>
+
+          <!-- Form -->
+          <ScrollViewer IsVisible="{Binding IsEditing}">
+            <StackPanel Spacing="12" MaxWidth="640" HorizontalAlignment="Left">
+              <TextBlock Text="{Binding EditorHeading}" FontWeight="SemiBold" FontSize="16"/>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Title" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding EditTitle}" Watermark="Short name, e.g. Access Kodi" MaxLength="80"/>
+              </StackPanel>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="When (if…)" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding EditWhen}" Watermark="The situation, e.g. kodi tools fail because Kodi is not running"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" MaxLength="400"/>
+              </StackPanel>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Then" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding EditThen}" Watermark="What to do, naming the servers/tools to use"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" MaxLength="800"/>
+              </StackPanel>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Services involved" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding EditServices}" Watermark="Server keys, comma-separated: kodi, adb, remoteadmin"/>
+                <TextBlock Text="The key is the prefix before '__' in a tool name on the Diagnostics page." Opacity="0.55" FontSize="11"/>
+              </StackPanel>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Notes (optional)" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding EditNotes}" Watermark="Caveats, versions, anything an agent should know"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56" MaxLength="1000"/>
+              </StackPanel>
+
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                <Button Content="Save" Command="{Binding SaveCommand}"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+                <Button Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}"/>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- Footer -->
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto">
+      <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Opacity="0.75" TextWrapping="Wrap" VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1" Text="{Binding FilePath}" Opacity="0.45" FontSize="11" VerticalAlignment="Center"
+                 FontFamily="Cascadia Mono,Consolas,monospace" Margin="16,0,0,0"/>
+    </Grid>
+
+  </Grid>
+</UserControl>

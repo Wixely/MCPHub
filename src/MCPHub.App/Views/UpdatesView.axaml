@@ -50,6 +50,7 @@
       <StackPanel Orientation="Horizontal" Spacing="12">
         <Button Content="Check for updates" Command="{Binding CheckCommand}" IsEnabled="{Binding !IsChecking}"/>
         <Button Content="Open release page" Command="{Binding OpenReleasePageCommand}"/>
+        <Button Content="Open install folder" Command="{Binding OpenInstallFolderCommand}"/>
         <ProgressBar IsIndeterminate="True" Width="120" Height="4" VerticalAlignment="Center"
                      IsVisible="{Binding IsChecking}"/>
       </StackPanel>

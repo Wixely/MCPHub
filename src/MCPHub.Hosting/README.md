@@ -20,6 +20,10 @@ await host.StartAsync("127.0.0.1", 5800);
 
 Pass port `0` to let the OS pick; `host.Port` reflects the bound port after start.
 
+`ProxyHostOptions` also carries the `ServerName` / `ServerVersion` advertised in the MCP initialize
+handshake and an optional `ServerInstructions` string — a short note clients hand to their model about
+how to use this server (MCPHub uses it to point agents at its recipes tools).
+
 ## Bearer-token tenancy
 
 ```csharp

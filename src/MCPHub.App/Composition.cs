@@ -9,6 +9,7 @@ using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
+using MCPHub.Core.Recipes;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
@@ -48,12 +49,32 @@ public static class Composition
         services.AddSingleton<ILogStore>(_ => new LogStore(capacity: 5000));
         services.AddSingleton<IServiceProcessHost, ServiceProcessHost>();
 
+        // Recipes knowledge base: persisted beside settings.json, edited on the Recipes page and by agents
+        // through the proxy's recipes__* tools (registered as an in-process tool provider below).
+        services.AddSingleton<IRecipeStore, RecipeStore>();
+        services.AddSingleton<ILocalToolProvider, RecipeToolProvider>();
+        // What agents may do with recipes (off / read-only / read-write): two settings, each overridable by a
+        // MCPHUB_RECIPES_* environment variable for headless deployments. Enforced as the proxy's tool authorization.
+        services.AddSingleton<RecipeAccessPolicy>();
+        services.AddSingleton<IRecipeAccessPolicy>(sp => sp.GetRequiredService<RecipeAccessPolicy>());
+
         // MCP proxy / aggregator
         services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
-        services.AddSingleton<ProxyHandlers>();
+        // Explicit factory: registering ProxyHandlers by type makes the container fall back to the
+        // registry-only constructor (the policy overload has a non-defaulted parameter it cannot
+        // resolve), which would silently drop the in-process tool providers.
+        services.AddSingleton(sp => new ProxyHandlers(
+            sp.GetRequiredService<IUpstreamRegistry>(),
+            authorization: sp.GetRequiredService<RecipeAccessPolicy>(),
+            auditSink: null,
+            tenantResolver: null,
+            localToolProviders: sp.GetServices<ILocalToolProvider>()));
+        // Instructions are captured when the host is built, so they reflect the policy at launch (and after a
+        // proxy restart); tool visibility itself follows the checkboxes live.
         services.AddSingleton(sp => new ProxyHost(
             sp.GetRequiredService<ProxyHandlers>(),
-            sp.GetRequiredService<ILoggerFactory>()));
+            sp.GetRequiredService<ILoggerFactory>(),
+            new ProxyHostOptions { ServerInstructions = sp.GetRequiredService<IRecipeAccessPolicy>().ServerInstructions }));
         services.AddSingleton<ProxyCoordinator>();
 
         // HTTP clients: GitHub releases, a short-timeout health probe, and long-timeout downloads.
@@ -102,6 +123,7 @@ public static class Composition
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
+        services.AddSingleton<RecipesViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<UpdatesViewModel>();
     }
