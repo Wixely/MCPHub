@@ -98,6 +98,33 @@ Output from any server, or from the proxy itself. Pick a source, filter the line
 
 This is the first place to look when a server won't start.
 
+### Recipes
+
+A small knowledge base of *"if X then Y"* notes on how to combine servers to finish a task no single server can. The canonical example: Kodi's tools are useless until Kodi is running — but on Android, ADB can launch it, and on a Windows or Linux box, Remote Admin can start it. Once an agent works that out, it can save the combination as a recipe ("Access Kodi") and never rediscover it.
+
+Recipes are server-agnostic — a recipe just names the server keys involved (`kodi`, `adb`, `remoteadmin`, or any user-added server). Agents read and write them through the proxy:
+
+| Tool | Does |
+| --- | --- |
+| `recipes__list` | All recipes, optionally filtered by `query` text or `service` key |
+| `recipes__get` | One recipe by id |
+| `recipes__add` | Save a new recipe: `title`, `when`, `then`, `services`, optional `notes` |
+| `recipes__update` | Change some fields of an existing recipe |
+| `recipes__remove` | Delete one |
+
+The proxy also tells connecting clients (via the MCP `instructions` field) that recipes exist and when to consult them, so an agent checks before a multi-server task rather than after it fails.
+
+The page lets you curate the same store by hand: search, add, edit and delete, with a live view of what agents have saved. Recipes are deliberately short — the fields are size-limited — and live in `recipes.json` beside your settings, so they can be backed up or edited directly.
+
+Two checkboxes at the top of the page decide what agents may do. They take effect immediately; disabled tools simply disappear from the proxy's tool list.
+
+| Checkbox | Off means | Headless / Docker flag |
+| --- | --- | --- |
+| **Let agents use recipes** | No `recipes__*` tools are exposed at all. The page still works for you. | `MCPHUB_RECIPES_ENABLED=false` |
+| **Let agents add and edit recipes** | Agents get `recipes__list` and `recipes__get` only — they can consult recipes but not change them. | `MCPHUB_RECIPES_AGENT_EDIT=false` |
+
+The environment variables win over the checkboxes when set (`true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`), so a container can pin the policy with `-e MCPHUB_RECIPES_AGENT_EDIT=false`; the page then shows the checkbox locked and says which variable is pinning it.
+
 ### Agent
 
 [DaggerAgent](https://github.com/Wixely/DaggerAgent) is an LLM agent that drives the whole suite through the proxy. Install it here and MCPHub wires it to the proxy for you. Run it as an interactive CLI, a web UI, or a background job poller.
@@ -138,11 +165,14 @@ This is the first place to look when a server won't start.
 | [Chrome DevTools](https://github.com/Wixely/ChromeDevToolsMCPSharp) | 5709 | Drive Chrome via the DevTools Protocol |
 | [Noteworthy](https://github.com/Wixely/NoteworthyMCPSharp) | 5711 | Create and edit MIDI music files |
 | [SQL](https://github.com/Wixely/SQLMCPSharp) | 5712 | MSSQL, MySQL, Oracle and SQLite |
+| [Kodi](https://github.com/Wixely/KodiMCPSharp) | 5712 | Browse and control Kodi media centres |
 | [Redis](https://github.com/Wixely/RedisMCPSharp) | 5713 | Read, write, search and diagnose Redis |
 | [Repo Detox](https://github.com/Wixely/RepoDetox) | 5714 | Clean secrets and history out of git repos |
 | [ComfyUI](https://github.com/Wixely/ComfyUIMCPSharp) | 5715 | Image generation with live progress |
 | [Portainer](https://github.com/Wixely/PortainerMCPSharp) | 5716 | Docker stacks and containers via Portainer |
 | [Mail & Calendar](https://github.com/Wixely/MailCalMCPSharp) | 5717 | Outlook, Gmail and IMAP mail plus calendars |
+| [Bambu Lab](https://github.com/Wixely/BambuMCPSharp) | 5718 | Bambu Lab X1-series printers in LAN mode |
+| [ADB](https://github.com/Wixely/ADBMCPSharp) | 21990 | Guarded Android Debug Bridge device access |
 
 These are each server's shipped default. MCPHub doesn't assume them — it reads the port from the
 server's own config after install, so changing one there is all it takes and the Services list
@@ -164,6 +194,7 @@ MCPHub updates itself the same way from the **Updates** page.
 | --- | --- |
 | Installed servers | The *Shared servers folder* from Settings |
 | Your settings | Your user config folder, under `MCPHub` |
+| Recipes | `recipes.json`, beside your settings |
 | Logs | Beside the installed servers, in `logs` |
 | Single-instance lock | `mcphub.lock` in your user data folder |
 

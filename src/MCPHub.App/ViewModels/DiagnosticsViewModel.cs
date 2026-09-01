@@ -19,6 +19,7 @@ namespace MCPHub.App.ViewModels;
 public sealed partial class DiagnosticsViewModel : ViewModelBase
 {
     private readonly IUpstreamRegistry _registry;
+    private readonly ProxyHandlers _handlers;
     private readonly ProxyHost _host;
 
     [ObservableProperty]
@@ -29,9 +30,10 @@ public sealed partial class DiagnosticsViewModel : ViewModelBase
 
     public ObservableCollection<DiagnosticsServerViewModel> Servers { get; } = [];
 
-    public DiagnosticsViewModel(ProxyCoordinator coordinator)
+    public DiagnosticsViewModel(ProxyCoordinator coordinator, ProxyHandlers handlers)
     {
         _registry = coordinator.Registry;
+        _handlers = handlers;
         _host = coordinator.Host;
         _registry.CatalogChanged += () => Dispatcher.UIThread.Post(Refresh);
         Refresh();
@@ -51,8 +53,9 @@ public sealed partial class DiagnosticsViewModel : ViewModelBase
 
         Servers.Clear();
 
-        // "MCP Proxy" pinned at the top: the complete set of calls the proxy advertises to clients.
-        var proxyTools = catalog.Tools
+        // "MCP Proxy" pinned at the top: the complete set of calls the proxy advertises to clients —
+        // upstream tools plus MCPHub's own in-process ones (recipes__*), exactly as tools/list returns them.
+        var proxyTools = _handlers.ListTools(TenantContext.Default).Tools
             .Select(t => new DiagnosticsToolViewModel(t.Name, string.Empty, CleanDescription(t.Description)))
             .Where(t => !filtering || t.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)

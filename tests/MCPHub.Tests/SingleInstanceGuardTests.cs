@@ -73,6 +73,35 @@ public class SingleInstanceGuardTests
     }
 
     [Fact]
+    public void Acquire_distinguishes_a_held_lock_from_an_unavailable_one()
+    {
+        using var dir = new TempDir();
+        var path = LockPath(dir);
+
+        Assert.Equal(SingleInstanceOutcome.Acquired, SingleInstanceGuard.Acquire(path, out var first));
+        using (first)
+        {
+            Assert.Equal(SingleInstanceOutcome.AlreadyHeld, SingleInstanceGuard.Acquire(path, out var second));
+            Assert.Null(second);
+        }
+    }
+
+    [Fact]
+    public void Unwritable_lock_directory_is_reported_not_mistaken_for_a_running_instance()
+    {
+        using var dir = new TempDir();
+
+        // A file sitting where the lock's directory should be: CreateDirectory cannot succeed.
+        var blocker = Path.Combine(dir.Path, "blocker");
+        File.WriteAllText(blocker, "not a directory");
+        var path = Path.Combine(blocker, SingleInstanceGuard.LockFileName);
+
+        Assert.Equal(SingleInstanceOutcome.LockUnavailable, SingleInstanceGuard.Acquire(path, out var guard));
+        Assert.Null(guard);
+        Assert.False(SingleInstanceGuard.TryAcquire(path, out _));
+    }
+
+    [Fact]
     public void Holder_is_stamped_into_the_lock_file()
     {
         using var dir = new TempDir();

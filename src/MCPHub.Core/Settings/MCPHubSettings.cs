@@ -97,4 +97,16 @@ public sealed class MCPHubSettings
 
     /// <summary>Auto-start the Slopworks vLLM server (<c>Slopworks.App.exe start</c>) when MCPHub launches.</summary>
     public bool AutoStartSlopworks { get; set; }
+
+    /// <summary>
+    /// Whether agents can see and call the <c>recipes__*</c> tools at all. Off hides the whole knowledge base
+    /// from the proxy; the Recipes page itself is unaffected. Overridable with <c>MCPHUB_RECIPES_ENABLED</c>.
+    /// </summary>
+    public bool RecipesEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Whether agents may add, update and remove recipes (off leaves <c>recipes__list</c> / <c>get</c> only).
+    /// Overridable with <c>MCPHUB_RECIPES_AGENT_EDIT</c>.
+    /// </summary>
+    public bool RecipesAgentEditEnabled { get; set; } = true;
 }

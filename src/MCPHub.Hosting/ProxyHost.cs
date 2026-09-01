@@ -30,6 +30,12 @@ public sealed class ProxyHostOptions
     /// <summary>Server version advertised in the MCP initialize handshake.</summary>
     public string ServerVersion { get; init; } =
         typeof(ProxyHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    /// <summary>
+    /// Optional instructions returned in the MCP initialize handshake — a short note clients feed to their
+    /// model about how to use this server (e.g. that a recipes knowledge base exists). <see langword="null"/> sends none.
+    /// </summary>
+    public string? ServerInstructions { get; init; }
 }
 
 /// <summary>
@@ -105,6 +111,7 @@ public sealed class ProxyHost
                         Name = _options.ServerName,
                         Version = _options.ServerVersion,
                     };
+                    options.ServerInstructions = _options.ServerInstructions;
                 })
                 .WithHttpTransport()
                 .WithListToolsHandler(_handlers.ListToolsAsync)

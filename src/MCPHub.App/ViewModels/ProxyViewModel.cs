@@ -18,6 +18,7 @@ public sealed partial class ProxyViewModel : ViewModelBase
     private readonly ProxyCoordinator _coordinator;
     private readonly ProxyHost _host;
     private readonly IUpstreamRegistry _registry;
+    private readonly ProxyHandlers _handlers;
     private readonly ISettingsStore _settings;
 
     [ObservableProperty] private bool _isRunning;
@@ -30,11 +31,12 @@ public sealed partial class ProxyViewModel : ViewModelBase
     public ObservableCollection<UpstreamRowViewModel> Upstreams { get; } = [];
     public ObservableCollection<UserServerRowViewModel> UserServers { get; } = [];
 
-    public ProxyViewModel(ProxyCoordinator coordinator, ISettingsStore settings)
+    public ProxyViewModel(ProxyCoordinator coordinator, ProxyHandlers handlers, ISettingsStore settings)
     {
         _coordinator = coordinator;
         _host = coordinator.Host;
         _registry = coordinator.Registry;
+        _handlers = handlers;
         _settings = settings;
         _registry.CatalogChanged += () => Dispatcher.UIThread.Post(Refresh);
         Refresh();
@@ -56,7 +58,7 @@ public sealed partial class ProxyViewModel : ViewModelBase
     private void Refresh()
     {
         IsRunning = _host.IsRunning;
-        ToolCount = _registry.Catalog.Tools.Count;
+        ToolCount = _handlers.ListTools(TenantContext.Default).Tools.Count; // upstream + in-process (recipes) tools
 
         Upstreams.Clear();
         foreach (var upstream in _registry.Upstreams.OrderBy(u => u.DisplayName))

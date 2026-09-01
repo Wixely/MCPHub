@@ -20,15 +20,24 @@ internal static class Program
         if (!SingleInstanceGuard.IsOverrideRequested(args))
         {
             var lockFilePath = SingleInstanceGuard.DefaultLockFilePath(new AppPaths());
-            if (!SingleInstanceGuard.TryAcquire(lockFilePath, out guard))
+            switch (SingleInstanceGuard.Acquire(lockFilePath, out guard))
             {
-                Console.Error.WriteLine(
-                    $"MCPHub is already running on this machine, so this instance will not start. " +
-                    $"It may be minimised to the notification area - look for the tray icon. " +
-                    $"Pass {SingleInstanceGuard.OverrideSwitch} to start an additional instance anyway, " +
-                    $"accepting that both will compete for the proxy port and the shared servers folder. " +
-                    $"(Lock file: {lockFilePath})");
-                return AlreadyRunningExitCode;
+                case SingleInstanceOutcome.AlreadyHeld:
+                    Console.Error.WriteLine(
+                        $"MCPHub is already running on this machine, so this instance will not start. " +
+                        $"It may be minimised to the notification area - look for the tray icon. " +
+                        $"Pass {SingleInstanceGuard.OverrideSwitch} to start an additional instance anyway, " +
+                        $"accepting that both will compete for the proxy port and the shared servers folder. " +
+                        $"(Lock file: {lockFilePath})");
+                    return AlreadyRunningExitCode;
+
+                case SingleInstanceOutcome.LockUnavailable:
+                    // Not a second instance — the lock simply has nowhere to live. Starting unguarded
+                    // beats being unstartable on a machine whose data directory is unwritable.
+                    Console.Error.WriteLine(
+                        $"MCPHub could not create its single-instance lock at {lockFilePath}, so it is starting " +
+                        $"without one. Check that the folder is writable; until it is, a second instance will not be refused.");
+                    break;
             }
         }
 
