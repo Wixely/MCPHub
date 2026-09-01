@@ -146,6 +146,7 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 | **Shared servers folder** | Where servers are installed. Change it to put them on another drive. |
 | **Download self-contained builds** | On by default. Bundles the .NET runtime — bigger downloads, but nothing to install. Turn it off only if you already have the .NET runtime. |
 | **Proxy port / bind** | The aggregated endpoint. `127.0.0.1` keeps it on this machine; change the bind address to reach it from your network. |
+| **Agent management** | Off by default. Lets agents on the proxy list, start/stop/restart, install/update and check updates for the managed servers through `mcphub__*` tools — see [Letting agents manage servers](#letting-agents-manage-servers). Applies immediately, no Save needed. |
 | **System tray** | Whether minimising and closing hide to the tray instead of exiting. |
 | **GitHub token** | Optional. Lifts GitHub's 60-requests-per-hour limit on update checks. Stored encrypted (DPAPI on Windows). |
 
@@ -181,6 +182,36 @@ follows.
 Most servers need configuring before they're useful — a connection string, an API token, the address of the thing they talk to. Click **Config** on the row to open that server's JSON, then **Stop** and **Start** it to pick up the change. Each server's own README documents its settings.
 
 > **A note on safety.** Servers that can change things ship **read-only by default**. Deleting a stack, dropping a table or restarting a machine stays blocked until you explicitly turn it on in that server's config. This is deliberate — check the server's README before you loosen it.
+
+## Letting agents manage servers
+
+An agent talking to the proxy can also be allowed to manage the servers behind it — bring up the one whose tools it needs, apply an update, or tell you a newer MCPHub is out. **This is off by default**: turn it on under **Settings → Agent management**, where one master switch and three capability switches decide what agents get. They take effect immediately; tools an agent may not use simply disappear from the proxy's tool list.
+
+| Switch | Grants | Headless / Docker flag |
+| --- | --- | --- |
+| **Let agents manage servers** | `mcphub__list_services` — every managed server with its install state, versions, run state and port. Everything below needs this on. | `MCPHUB_AGENT_MANAGEMENT_ENABLED=true` |
+| **Start, stop and restart servers** | `mcphub__start`, `mcphub__stop`, `mcphub__restart` | `MCPHUB_AGENT_MANAGEMENT_CONTROL=false` |
+| **Install and update servers** | `mcphub__install`, `mcphub__update` | `MCPHUB_AGENT_MANAGEMENT_INSTALL=false` |
+| **Check GitHub for server and MCPHub updates** | `mcphub__check_service_updates`, `mcphub__check_hub_update` | `MCPHUB_AGENT_MANAGEMENT_UPDATE_CHECKS=false` |
+
+As with recipes, an environment variable wins over the checkbox when set (`true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`), and the page shows the checkbox locked with the variable that is pinning it.
+
+| Tool | Does |
+| --- | --- |
+| `mcphub__list_services` | Lists every server. Optional `query` narrows by name or key. |
+| `mcphub__start` | Starts an installed server and waits (`wait_seconds`, default 30) for it to report healthy. Its tools then appear in the proxy. |
+| `mcphub__stop` | Stops a running server. |
+| `mcphub__restart` | Stop then start — the usual move after you have edited a server's config. |
+| `mcphub__install` | Installs a server that is not installed, from its latest GitHub release. `start: true` brings it up afterwards. Refuses if already installed. |
+| `mcphub__update` | Checks for a newer release and installs it, preserving your config and restarting the server if it was running. Does nothing when up to date unless `force: true`. |
+| `mcphub__check_service_updates` | Checks GitHub for one server or all of them. Installs nothing. |
+| `mcphub__check_hub_update` | Compares the running MCPHub with its newest release. MCPHub never replaces itself — the agent is told to give you the release page URL. |
+
+Every server is addressed by its key (`kodi`, the prefix on its tool names), its product name (`KodiMCPSharp`) or its display name. Operations on the same server are serialised, so an agent cannot start what it is halfway through updating. Anything an agent does is written to that server's log, so the Logs page shows who drove a change.
+
+What agents **cannot** do through these tools, by design: read or edit a server's config files, or read logs. If a server won't start, the agent is told to ask you — the Logs page is yours.
+
+The proxy's MCP `instructions` describe the granted capabilities to a connecting client, so an agent knows it can start a stopped server rather than reporting its tools as missing.
 
 ## Updating
 

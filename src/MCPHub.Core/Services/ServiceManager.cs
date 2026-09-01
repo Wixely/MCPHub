@@ -43,6 +43,12 @@ public interface IServiceManager
     /// <paramref name="progress"/>. Throws if no release/asset is available.
     /// </summary>
     Task InstallOrUpdateAsync(ManagedService service, IProgress<double>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Raised (on the calling thread) after a service's install/version/update state changes through this
+    /// manager, so a UI can refresh a row that something other than itself — an agent, say — drove.
+    /// </summary>
+    event Action<ManagedService>? ServiceChanged;
 }
 
 /// <inheritdoc />
@@ -84,6 +90,9 @@ public sealed class ServiceManager : IServiceManager
 
     public PublishFlavor Flavor { get; set; }
 
+    /// <inheritdoc />
+    public event Action<ManagedService>? ServiceChanged;
+
     public async Task RefreshInstalledAsync(CancellationToken cancellationToken = default)
     {
         var installed = await _manifestStore.ReadAsync(ServersFolder, cancellationToken);
@@ -100,6 +109,7 @@ public sealed class ServiceManager : IServiceManager
             // Follow the installed server's own config for the effective port; fall back to the default.
             service.Port = ServerConfigReader.ReadPort(service.ConfigPath) ?? service.Catalog.DefaultPort;
             service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
+            ServiceChanged?.Invoke(service);
         }
     }
 
@@ -113,6 +123,7 @@ public sealed class ServiceManager : IServiceManager
         }
 
         service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
+        ServiceChanged?.Invoke(service);
         return release;
     }
 
@@ -124,6 +135,7 @@ public sealed class ServiceManager : IServiceManager
 
         service.LatestVersion = cached.Version;
         service.UpdateStatus = UpdateStatusCalculator.Compute(service.InstalledVersion, service.LatestVersion);
+        ServiceChanged?.Invoke(service);
         return true;
     }
 
@@ -160,6 +172,14 @@ public sealed class ServiceManager : IServiceManager
             throw new InvalidOperationException($"No matching {Flavor} asset for {catalog.Name} {release.Version}.");
         }
 
-        await _downloadService.InstallAsync(service, asset, release.Version, progress, cancellationToken);
+        try
+        {
+            await _downloadService.InstallAsync(service, asset, release.Version, progress, cancellationToken);
+        }
+        finally
+        {
+            // Success or failure, the row's install/version state may have moved — let listeners re-read it.
+            ServiceChanged?.Invoke(service);
+        }
     }
 }

@@ -49,6 +49,9 @@ public sealed partial class ServicesViewModel : ViewModelBase
         ApplyFilter();
 
         _processHost.StateChanged += OnServiceStateChanged;
+        // Installs and update checks can also be driven by an agent (mcphub__install / mcphub__update /
+        // mcphub__check_service_updates); refresh the row when the manager reports a change from anywhere.
+        _manager.ServiceChanged += OnServiceStateChanged;
 
         StatusMessage = $"Servers folder: {manager.ServersFolder}";
         _ = InitializeAsync();

@@ -112,26 +112,10 @@ public sealed class RecipeAccessPolicy : IRecipeAccessPolicy, IToolAuthorization
         return ReadOnlyTools.Contains(original);
     }
 
-    private bool? Override(string variable) => ParseFlag(_environment(variable));
+    private bool? Override(string variable) => EnvironmentFlag.Parse(_environment(variable));
 
-    private string? OverrideSource(string variable)
-    {
-        var raw = _environment(variable);
-        return ParseFlag(raw) is null ? null : $"{variable}={raw!.Trim()}";
-    }
+    private string? OverrideSource(string variable) => EnvironmentFlag.Describe(variable, _environment(variable));
 
-    /// <summary>Parses a boolean flag as containers commonly spell it; unrecognised or blank → <see langword="null"/> (no override).</summary>
-    public static bool? ParseFlag(string? raw)
-    {
-        var value = raw?.Trim();
-        if (string.IsNullOrEmpty(value))
-            return null;
-
-        return value.ToLowerInvariant() switch
-        {
-            "1" or "true" or "yes" or "on" or "enabled" => true,
-            "0" or "false" or "no" or "off" or "disabled" => false,
-            _ => null,
-        };
-    }
+    /// <summary>Parses a boolean flag as containers commonly spell it; unrecognised or blank → <see langword="null"/> (no override). See <see cref="EnvironmentFlag.Parse"/>.</summary>
+    public static bool? ParseFlag(string? raw) => EnvironmentFlag.Parse(raw);
 }
