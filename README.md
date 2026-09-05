@@ -166,14 +166,14 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 | [Chrome DevTools](https://github.com/Wixely/ChromeDevToolsMCPSharp) | 5709 | Drive Chrome via the DevTools Protocol |
 | [Noteworthy](https://github.com/Wixely/NoteworthyMCPSharp) | 5711 | Create and edit MIDI music files |
 | [SQL](https://github.com/Wixely/SQLMCPSharp) | 5712 | MSSQL, MySQL, Oracle and SQLite |
-| [Kodi](https://github.com/Wixely/KodiMCPSharp) | 5712 | Browse and control Kodi media centres |
+| [Kodi](https://github.com/Wixely/KodiMCPSharp) | 5720 | Browse and control Kodi media centres |
 | [Redis](https://github.com/Wixely/RedisMCPSharp) | 5713 | Read, write, search and diagnose Redis |
 | [Repo Detox](https://github.com/Wixely/RepoDetox) | 5714 | Clean secrets and history out of git repos |
 | [ComfyUI](https://github.com/Wixely/ComfyUIMCPSharp) | 5715 | Image generation with live progress |
 | [Portainer](https://github.com/Wixely/PortainerMCPSharp) | 5716 | Docker stacks and containers via Portainer |
 | [Mail & Calendar](https://github.com/Wixely/MailCalMCPSharp) | 5717 | Outlook, Gmail and IMAP mail plus calendars |
 | [Bambu Lab](https://github.com/Wixely/BambuMCPSharp) | 5718 | Bambu Lab X1-series printers in LAN mode |
-| [ADB](https://github.com/Wixely/ADBMCPSharp) | 21990 | Guarded Android Debug Bridge device access |
+| [ADB](https://github.com/Wixely/ADBMCPSharp) | 5719 | Guarded Android Debug Bridge device access |
 
 These are each server's shipped default. MCPHub doesn't assume them — it reads the port from the
 server's own config after install, so changing one there is all it takes and the Services list
