@@ -24,6 +24,24 @@ var handlers = new ProxyHandlers(registry);   // allow-all, no audit — single-
 with capped exponential backoff. Multiple registries (and hosts) per process are supported — there
 is no static mutable state.
 
+## Upstreams that require a credential
+
+Both connect methods take the credential the upstream needs. HTTP gets headers; stdio gets
+environment variables, never command-line arguments, which any process listing can read:
+
+```csharp
+await registry.ConnectAsync("secured", "Secured remote", new Uri("https://example.com/mcp"),
+    new Dictionary<string, string> { ["Authorization"] = "Bearer " + token });
+
+await registry.ConnectStdioAsync("files", "File server", "files-mcp.exe", [],
+    new Dictionary<string, string?> { ["FILES_MCP_TOKEN"] = token });
+```
+
+Both are copied on the way in and held for the life of the upstream, so the reconnect loop
+re-presents them after a fault without the caller keeping the dictionary alive. Neither reaches
+`UpstreamServer.Endpoint`, which is a display label — any userinfo in the URL is stripped from it,
+so a token pasted into `https://token@host/mcp` does not end up in your UI or logs.
+
 ## In-process tools
 
 Tools implemented inside the proxy process — not by an upstream server — plug in through

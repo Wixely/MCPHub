@@ -52,6 +52,19 @@ Click **Copy snippet** and paste it into your client:
 
 Add or remove servers later and your client config never changes — the proxy picks them up as they start and stop.
 
+### Adding your own servers
+
+The Proxy page also aggregates MCP servers MCPHub doesn't manage — any HTTP endpoint, or a local command spoken to over stdio. Give it a name, the URL or command, and it joins the same aggregated endpoint under its own tool namespace.
+
+If the server needs a credential, put it in the **Token** box:
+
+| Transport | Leave the left box empty | Fill in the left box |
+| --- | --- | --- |
+| HTTP | `Authorization: Bearer <token>` | that header name, token sent verbatim (e.g. `X-API-Key`) |
+| stdio | `MCP_AUTH_TOKEN=<token>` in the child process | that variable name instead |
+
+Tokens are held in MCPHub's encrypted secret store — DPAPI on Windows, a user-only file elsewhere — and never written to `settings.json`, which records only *how* the token is sent. Use **Replace token** on a server's row when a credential rotates, and **Clear token** to drop it; removing a server deletes its token too. Nothing is ever passed on a stdio command line, where any process listing would show it.
+
 ## The pages
 
 ### Services
@@ -249,6 +262,8 @@ The lock is an exclusive lock the operating system holds on `mcphub.lock` for as
 **My client can't see any tools.** Check the **Proxy** page shows the proxy running and at least one server *Connected*. A server has to be **Running** on the Services page before the proxy will pick it up.
 
 **Nothing is listed as Connected.** Servers connect a moment after they start. If a server sits at *Starting* it's failing its health check — check its logs.
+
+**A server I added keeps faulting with 401 or "unauthorized".** Its row on the Proxy page names how it authenticates. *"No token"* means nothing is being sent — use **Set token**. *"BearerToken configured — token missing"* means the mechanism is set but the secret store has no value for it, which also shows as a warning in the logs; set the token again. If the server wants an API-key header rather than a bearer token, name that header in the box to the left of the token.
 
 ## Licence
 

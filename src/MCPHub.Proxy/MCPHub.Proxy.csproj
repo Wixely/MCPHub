@@ -15,4 +15,9 @@
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Lets the tests reach internal helpers (e.g. endpoint redaction) without widening the package surface. -->
+    <InternalsVisibleTo Include="MCPHub.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -19,6 +19,7 @@ public sealed class ProxyCoordinator
     private readonly IServiceProcessHost _processHost;
     private readonly ProxyHost _proxyHost;
     private readonly ISettingsStore _settings;
+    private readonly ISecretStore _secrets;
     private readonly ILogger<ProxyCoordinator> _logger;
 
     public ProxyCoordinator(
@@ -26,12 +27,14 @@ public sealed class ProxyCoordinator
         IUpstreamRegistry registry,
         ProxyHost proxyHost,
         ISettingsStore settings,
+        ISecretStore secrets,
         ILogger<ProxyCoordinator> logger)
     {
         _processHost = processHost;
         Registry = registry;
         _proxyHost = proxyHost;
         _settings = settings;
+        _secrets = secrets;
         _logger = logger;
     }
 
@@ -83,15 +86,39 @@ public sealed class ProxyCoordinator
         var name = string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.Key : definition.DisplayName;
         try
         {
+            var token = ReadToken(definition);
+
             if (definition.Kind == McpTransportKind.Http && Uri.TryCreate(definition.Endpoint, UriKind.Absolute, out var uri))
-                await Registry.ConnectAsync(definition.Key, name, uri);
+                await Registry.ConnectAsync(definition.Key, name, uri, UserServerAuth.BuildHeaders(definition, token));
             else if (definition.Kind == McpTransportKind.Stdio && !string.IsNullOrWhiteSpace(definition.Command))
-                await Registry.ConnectStdioAsync(definition.Key, name, definition.Command!, definition.Arguments);
+                await Registry.ConnectStdioAsync(
+                    definition.Key, name, definition.Command!, definition.Arguments, UserServerAuth.BuildEnvironment(definition, token));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to connect user server {Name}.", name);
         }
+    }
+
+    /// <summary>
+    /// Reads this server's token from the secret store. A server that declares an auth mechanism but has no
+    /// stored token is reported: it still connects, but unauthenticated, and the resulting 401 on every call
+    /// is far harder to trace back to a missing secret than to a log line saying so.
+    /// </summary>
+    private string? ReadToken(UserMcpServerDefinition definition)
+    {
+        if (definition.Auth == McpAuthKind.None)
+            return null;
+
+        var token = _secrets.Get(definition.SecretKey);
+        if (!string.IsNullOrEmpty(token))
+            return token;
+
+        _logger.LogWarning(
+            "User server {Name} is configured for {Auth} but no token is stored; connecting without credentials.",
+            string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.Key : definition.DisplayName,
+            definition.Auth);
+        return null;
     }
 
     private void OnServiceStateChanged(ManagedService service) => _ = SyncUpstreamAsync(service);

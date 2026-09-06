@@ -20,11 +20,32 @@ public interface IUpstreamRegistry
     /// <summary>Raised after the catalog changes (an upstream connected/disconnected/re-listed).</summary>
     event Action? CatalogChanged;
 
-    /// <summary>Connects (or reconnects) an HTTP upstream and folds its tools into the catalog under <paramref name="key"/>.</summary>
-    Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Connects (or reconnects) an HTTP upstream and folds its tools into the catalog under <paramref name="key"/>.
+    /// <paramref name="headers"/> is sent with every request to that upstream — this is where an
+    /// <c>Authorization</c> or API-key header for a server that requires one belongs. It is held for the life of
+    /// the upstream so the reconnect loop can re-present it, and never appears in the endpoint label or logs.
+    /// </summary>
+    Task ConnectAsync(
+        string key,
+        string displayName,
+        Uri endpoint,
+        IReadOnlyDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>Connects (or reconnects) a stdio upstream launched as <paramref name="command"/> and folds its tools into the catalog under <paramref name="key"/>.</summary>
-    Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Connects (or reconnects) a stdio upstream launched as <paramref name="command"/> and folds its tools into
+    /// the catalog under <paramref name="key"/>. <paramref name="environment"/> is applied on top of the inherited
+    /// environment of the child process — the right place for a token, since anything on the command line is
+    /// visible to any process listing.
+    /// </summary>
+    Task ConnectStdioAsync(
+        string key,
+        string displayName,
+        string command,
+        IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string?>? environment = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Removes an upstream and rebuilds the catalog without it.</summary>
     Task DisconnectAsync(string key, CancellationToken cancellationToken = default);
@@ -61,20 +82,68 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
     public event Action? CatalogChanged;
 
     /// <inheritdoc />
-    public Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default)
-        => ConnectCoreAsync(key, displayName, endpoint.ToString(),
+    public Task ConnectAsync(
+        string key,
+        string displayName,
+        Uri endpoint,
+        IReadOnlyDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Copy now: the caller's dictionary must not be able to change what a later reconnect presents.
+        var pinned = headers is { Count: > 0 }
+            ? new Dictionary<string, string>(headers, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        return ConnectCoreAsync(key, displayName, DescribeEndpoint(endpoint),
             () => new HttpClientTransport(
-                new HttpClientTransportOptions { Endpoint = endpoint, TransportMode = HttpTransportMode.AutoDetect },
+                new HttpClientTransportOptions
+                {
+                    Endpoint = endpoint,
+                    TransportMode = HttpTransportMode.AutoDetect,
+                    AdditionalHeaders = pinned,
+                },
                 _loggerFactory),
             cancellationToken);
+    }
 
     /// <inheritdoc />
-    public Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
-        => ConnectCoreAsync(key, displayName, $"stdio: {command}",
+    public Task ConnectStdioAsync(
+        string key,
+        string displayName,
+        string command,
+        IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string?>? environment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var pinnedArguments = arguments?.ToList() ?? [];
+        var pinnedEnvironment = environment is { Count: > 0 }
+            ? new Dictionary<string, string?>(environment, StringComparer.Ordinal)
+            : null;
+
+        return ConnectCoreAsync(key, displayName, $"stdio: {command}",
             () => new StdioClientTransport(
-                new StdioClientTransportOptions { Command = command, Arguments = arguments?.ToList() ?? [] },
+                new StdioClientTransportOptions
+                {
+                    Command = command,
+                    Arguments = pinnedArguments,
+                    EnvironmentVariables = pinnedEnvironment,
+                },
                 _loggerFactory),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Endpoint text for the UI and logs. Any userinfo is stripped: pasting
+    /// <c>https://token@host/mcp</c> is a natural mistake, and that label is shown on the Proxy page
+    /// and written to every connect/fault log line.
+    /// </summary>
+    internal static string DescribeEndpoint(Uri endpoint)
+    {
+        if (!endpoint.IsAbsoluteUri || string.IsNullOrEmpty(endpoint.UserInfo))
+            return endpoint.ToString();
+
+        return new UriBuilder(endpoint) { UserName = string.Empty, Password = string.Empty }.Uri.ToString();
+    }
 
     private Task ConnectCoreAsync(string key, string displayName, string endpointLabel, Func<IClientTransport> transportFactory, CancellationToken cancellationToken)
     {

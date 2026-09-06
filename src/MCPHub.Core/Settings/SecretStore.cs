@@ -10,6 +10,12 @@ namespace MCPHub.Core.Settings;
 public static class SecretKeys
 {
     public const string GithubPat = "github_pat";
+
+    /// <summary>Prefix for per-user-server auth tokens.</summary>
+    public const string UserServerTokenPrefix = "user_server_token_";
+
+    /// <summary>Key holding the auth token for the user-added server with id <paramref name="serverId"/>.</summary>
+    public static string UserServerToken(string serverId) => UserServerTokenPrefix + serverId;
 }
 
 /// <summary>Stores small secrets (e.g. the GitHub PAT). Never plaintext on Windows.</summary>

@@ -22,10 +22,21 @@ internal static class ProxyTestKit
 
         public event Action? CatalogChanged { add { } remove { } }
 
-        public Task ConnectAsync(string key, string displayName, Uri endpoint, CancellationToken cancellationToken = default)
+        public Task ConnectAsync(
+            string key,
+            string displayName,
+            Uri endpoint,
+            IReadOnlyDictionary<string, string>? headers = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task ConnectStdioAsync(string key, string displayName, string command, IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
+        public Task ConnectStdioAsync(
+            string key,
+            string displayName,
+            string command,
+            IReadOnlyList<string> arguments,
+            IReadOnlyDictionary<string, string?>? environment = null,
+            CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task DisconnectAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;

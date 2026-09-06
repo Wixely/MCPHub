@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Text.Json.Serialization;
 using MCPHub.Core.Models;
 
 namespace MCPHub.Core.Settings;
@@ -11,6 +12,32 @@ public enum McpTransportKind
 
     /// <summary>Local child process spoken to over stdio.</summary>
     Stdio,
+}
+
+/// <summary>
+/// How MCPHub presents a credential to a user-added MCP server. The token itself is never part of
+/// the settings file — only the delivery mechanism is; see <see cref="UserMcpServerDefinition.SecretKey"/>.
+/// </summary>
+public enum McpAuthKind
+{
+    /// <summary>No credential is sent.</summary>
+    None,
+
+    /// <summary>HTTP: sent as <c>Authorization: Bearer &lt;token&gt;</c>.</summary>
+    BearerToken,
+
+    /// <summary>
+    /// HTTP: sent verbatim (no scheme prefix) as the header named by
+    /// <see cref="UserMcpServerDefinition.AuthHeaderName"/>, e.g. <c>X-API-Key</c>.
+    /// </summary>
+    HeaderToken,
+
+    /// <summary>
+    /// stdio: passed to the child process in the environment variable named by
+    /// <see cref="UserMcpServerDefinition.AuthEnvironmentVariable"/>. Nothing is put on the command line,
+    /// where it would be visible to any process listing.
+    /// </summary>
+    EnvironmentToken,
 }
 
 /// <summary>A user-defined MCP server (beyond the Wixely catalog) for the proxy to aggregate.</summary>
@@ -30,7 +57,40 @@ public sealed class UserMcpServerDefinition
 
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// How this server's token is presented, if it has one. The token lives in the secret store under
+    /// <see cref="SecretKey"/> — deliberately never in this object, so it cannot reach <c>settings.json</c>.
+    /// </summary>
+    public McpAuthKind Auth { get; set; } = McpAuthKind.None;
+
+    /// <summary>Header carrying the token when <see cref="Auth"/> is <see cref="McpAuthKind.HeaderToken"/>; blank means <c>X-API-Key</c>.</summary>
+    public string? AuthHeaderName { get; set; }
+
+    /// <summary>Environment variable carrying the token when <see cref="Auth"/> is <see cref="McpAuthKind.EnvironmentToken"/>; blank means <c>MCP_AUTH_TOKEN</c>.</summary>
+    public string? AuthEnvironmentVariable { get; set; }
+
+    /// <summary>Secret-store key holding this server's token. Derived from <see cref="Id"/>; never serialised.</summary>
+    [JsonIgnore]
+    public string SecretKey => SecretKeys.UserServerToken(Id);
+
+    /// <summary>Header actually used for <see cref="McpAuthKind.HeaderToken"/>, applying the default.</summary>
+    [JsonIgnore]
+    public string EffectiveAuthHeaderName =>
+        string.IsNullOrWhiteSpace(AuthHeaderName) ? DefaultAuthHeaderName : AuthHeaderName.Trim();
+
+    /// <summary>Environment variable actually used for <see cref="McpAuthKind.EnvironmentToken"/>, applying the default.</summary>
+    [JsonIgnore]
+    public string EffectiveAuthEnvironmentVariable =>
+        string.IsNullOrWhiteSpace(AuthEnvironmentVariable) ? DefaultAuthEnvironmentVariable : AuthEnvironmentVariable.Trim();
+
+    /// <summary>Header used when <see cref="McpAuthKind.HeaderToken"/> is chosen without naming one.</summary>
+    public const string DefaultAuthHeaderName = "X-API-Key";
+
+    /// <summary>Environment variable used when <see cref="McpAuthKind.EnvironmentToken"/> is chosen without naming one.</summary>
+    public const string DefaultAuthEnvironmentVariable = "MCP_AUTH_TOKEN";
+
     /// <summary>Stable namespacing key for the proxy, e.g. <c>user-myserver</c>.</summary>
+    [JsonIgnore]
     public string Key
     {
         get
@@ -38,6 +98,47 @@ public sealed class UserMcpServerDefinition
             var slug = new string((DisplayName ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
             return "user-" + (string.IsNullOrEmpty(slug) ? Id : slug);
         }
+    }
+}
+
+/// <summary>
+/// Turns a user-added server's declared <see cref="McpAuthKind"/> plus its stored token into the headers or
+/// environment the transport actually needs. Pure and token-in/token-out so it can be exercised without a
+/// secret store; the caller is responsible for fetching the token.
+/// </summary>
+public static class UserServerAuth
+{
+    /// <summary>
+    /// HTTP headers carrying <paramref name="token"/>, or <see langword="null"/> when this server sends no
+    /// header credential — including when the token is absent, so a bare <c>Bearer </c> is never sent.
+    /// </summary>
+    public static Dictionary<string, string>? BuildHeaders(UserMcpServerDefinition definition, string? token)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (string.IsNullOrEmpty(token))
+            return null;
+
+        return definition.Auth switch
+        {
+            McpAuthKind.BearerToken => new(StringComparer.OrdinalIgnoreCase) { ["Authorization"] = "Bearer " + token },
+            McpAuthKind.HeaderToken => new(StringComparer.OrdinalIgnoreCase) { [definition.EffectiveAuthHeaderName] = token },
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Environment carrying <paramref name="token"/> for a stdio server, or <see langword="null"/> when this
+    /// server sends no environment credential.
+    /// </summary>
+    public static Dictionary<string, string?>? BuildEnvironment(UserMcpServerDefinition definition, string? token)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
+        if (string.IsNullOrEmpty(token) || definition.Auth != McpAuthKind.EnvironmentToken)
+            return null;
+
+        return new(StringComparer.Ordinal) { [definition.EffectiveAuthEnvironmentVariable] = token };
     }
 }
 

@@ -96,18 +96,38 @@
           <CheckBox Grid.Column="2" Content="stdio" IsChecked="{Binding NewServerIsStdio}" VerticalAlignment="Center"/>
           <Button Grid.Column="3" Content="Add" Command="{Binding AddUserServerCommand}"/>
         </Grid>
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="8">
+          <TextBox Grid.Column="0" Watermark="{Binding NewServerAuthNameWatermark}" Text="{Binding NewServerAuthName}"/>
+          <TextBox Grid.Column="1" Watermark="Token (optional)" PasswordChar="•" Text="{Binding NewServerToken}"/>
+        </Grid>
+        <TextBlock Text="Tokens are kept in the encrypted secret store, never in settings.json. Leave the left box empty for Authorization: Bearer."
+                   Opacity="0.5" FontSize="11" TextWrapping="Wrap"/>
         <ItemsControl ItemsSource="{Binding UserServers}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:UserServerRowViewModel">
               <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="2,8">
-                <Grid ColumnDefinitions="*,Auto,Auto" VerticalAlignment="Center">
-                  <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding Target}" Opacity="0.55" FontSize="11"/>
-                  </StackPanel>
-                  <Button Grid.Column="1" Content="{Binding ToggleText}" Margin="0,0,6,0" Command="{Binding ToggleCommand}"/>
-                  <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"/>
-                </Grid>
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                      <TextBlock Text="{Binding Target}" Opacity="0.55" FontSize="11"/>
+                      <TextBlock Text="{Binding AuthSummary}" Opacity="0.55" FontSize="11"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="{Binding SetTokenButtonText}" Margin="0,0,6,0"
+                            Command="{Binding BeginEditTokenCommand}" IsVisible="{Binding !IsEditingToken}"/>
+                    <Button Grid.Column="2" Content="Clear token" Margin="0,0,6,0"
+                            Command="{Binding ClearTokenCommand}"
+                            IsVisible="{Binding HasToken}"/>
+                    <Button Grid.Column="3" Content="{Binding ToggleText}" Margin="0,0,6,0" Command="{Binding ToggleCommand}"/>
+                    <Button Grid.Column="4" Content="Remove" Command="{Binding RemoveCommand}"/>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" IsVisible="{Binding IsEditingToken}">
+                    <TextBox Grid.Column="0" Watermark="Paste a token to set or replace…" PasswordChar="•"
+                             Text="{Binding TokenInput}"/>
+                    <Button Grid.Column="1" Content="Save" Command="{Binding SaveTokenCommand}"/>
+                    <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelEditTokenCommand}"/>
+                  </Grid>
+                </StackPanel>
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
