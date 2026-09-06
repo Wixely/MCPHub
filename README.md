@@ -174,6 +174,7 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 | [Mail & Calendar](https://github.com/Wixely/MailCalMCPSharp) | 5717 | Outlook, Gmail and IMAP mail plus calendars |
 | [Bambu Lab](https://github.com/Wixely/BambuMCPSharp) | 5718 | Bambu Lab X1-series printers in LAN mode |
 | [ADB](https://github.com/Wixely/ADBMCPSharp) | 5719 | Guarded Android Debug Bridge device access |
+| [WordPress](https://github.com/Wixely/WordpressMCPSharp) | 5721 | Build, manage and diagnose WordPress sites (incl. WooCommerce) |
 
 These are each server's shipped default. MCPHub doesn't assume them — it reads the port from the
 server's own config after install, so changing one there is all it takes and the Services list

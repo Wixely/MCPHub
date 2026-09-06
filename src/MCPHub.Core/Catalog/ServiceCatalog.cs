@@ -1,7 +1,7 @@
 namespace MCPHub.Core.Catalog;
 
 /// <summary>
-/// The fixed set of 20 Wixely MCPSharp products MCPHub manages.
+/// The fixed set of 21 Wixely MCPSharp products MCPHub manages.
 /// </summary>
 /// <remarks>
 /// Most products live in a repo named after the product. The exception is <c>RepoDetoxMCPSharp</c>,
@@ -87,6 +87,9 @@ public static class ServiceCatalog
 
         new("BambuMCPSharp", "Wixely", "BambuMCPSharp",
             "Bambu Lab", "Bambu Lab X1-series 3D printer (LAN mode: status, control, camera) MCP server", null, "BAMBUMCP_"),
+
+        new("WordpressMCPSharp", "Wixely", "WordpressMCPSharp",
+            "WordPress", "WordPress sites (content, WooCommerce, updates, backups, diagnostics) MCP server", null, "WORDPRESSMCP_"),
 
         // Ships one self-contained asset per OS named {Name}-v{ver}-{os}-x64.zip (also arm64, which
         // MCPHub does not select) — no flavour token, so the flavour setting is ignored.

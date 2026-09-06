@@ -8,7 +8,7 @@ public class ServiceCatalogTests
     [Fact]
     public void Catalog_contains_all_twenty_products()
     {
-        Assert.Equal(20, ServiceCatalog.All.Count);
+        Assert.Equal(21, ServiceCatalog.All.Count);
     }
 
     [Fact]
