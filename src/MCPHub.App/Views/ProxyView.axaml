@@ -7,6 +7,25 @@
              x:Class="MCPHub.App.Views.ProxyView"
              x:DataType="vm:ProxyViewModel">
 
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="ProxyAlternateRowBrush" Color="#18000000"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="ProxyAlternateRowBrush" Color="#18FFFFFF"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="ItemsControl.proxyRows > ContentPresenter:nth-child(2n)">
+      <Setter Property="Background" Value="{DynamicResource ProxyAlternateRowBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
   <ScrollViewer>
     <StackPanel Margin="24" Spacing="16">
 
@@ -58,7 +77,7 @@
             <TextBlock Grid.Column="2" Text="Tools" FontWeight="SemiBold"/>
           </Grid>
         </Border>
-        <ItemsControl ItemsSource="{Binding Upstreams}">
+        <ItemsControl Classes="proxyRows" ItemsSource="{Binding Upstreams}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:UpstreamRowViewModel">
               <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,9">
@@ -102,7 +121,7 @@
         </Grid>
         <TextBlock Text="Tokens are kept in the encrypted secret store, never in settings.json. Leave the left box empty for Authorization: Bearer."
                    Opacity="0.5" FontSize="11" TextWrapping="Wrap"/>
-        <ItemsControl ItemsSource="{Binding UserServers}">
+        <ItemsControl Classes="proxyRows" ItemsSource="{Binding UserServers}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:UserServerRowViewModel">
               <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="2,8">

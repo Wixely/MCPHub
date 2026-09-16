@@ -3,15 +3,20 @@
   "tasks": [
     {
       "label": "build",
-      "detail": "dotnet build the whole solution",
+      "detail": "Build the solution in Debug for the MCPHub launch configuration",
       "command": "dotnet",
       "type": "process",
       "args": [
         "build",
         "${workspaceFolder}/MCPHub.slnx",
+        "--configuration",
+        "Debug",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "problemMatcher": "$msCompile",
       "group": {
         "kind": "build",

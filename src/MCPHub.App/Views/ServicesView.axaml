@@ -7,6 +7,19 @@
              x:Class="MCPHub.App.Views.ServicesView"
              x:DataType="vm:ServicesViewModel">
 
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="ServiceAlternateRowBrush" Color="#18000000"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="ServiceAlternateRowBrush" Color="#18FFFFFF"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
   <DockPanel Margin="24">
 
     <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
@@ -65,7 +78,13 @@
                Text="No servers match that name."/>
 
     <ScrollViewer>
-      <ItemsControl ItemsSource="{Binding FilteredServices}">
+      <ItemsControl Classes="serviceRows" ItemsSource="{Binding FilteredServices}">
+        <ItemsControl.Styles>
+          <!-- Index the visible containers so filtering keeps adjacent rows alternating. -->
+          <Style Selector="ItemsControl.serviceRows > ContentPresenter:nth-child(2n)">
+            <Setter Property="Background" Value="{DynamicResource ServiceAlternateRowBrush}"/>
+          </Style>
+        </ItemsControl.Styles>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ManagedServiceViewModel">
             <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,8">
