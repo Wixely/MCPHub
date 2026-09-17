@@ -9,4 +9,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/MCPHub.Tests/MCPHub.Tests.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/HeadlessRouter/HeadlessRouter.csproj" />
+  </Folder>
 </Solution>

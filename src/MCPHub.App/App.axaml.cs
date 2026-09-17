@@ -10,6 +10,7 @@ using MCPHub.App.ViewModels;
 using MCPHub.App.Views;
 using MCPHub.Core.Process;
 using MCPHub.Core.Settings;
+using MCPHub.Core.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MCPHub.App;
@@ -42,10 +43,13 @@ public partial class App : Application
 
             // Start the aggregated MCP proxy endpoint and begin tracking running services.
             _ = Services.GetRequiredService<ProxyCoordinator>().StartAsync();
+            _ = Services.GetRequiredService<RouterHost>().StartConfiguredAsync();
 
             // Stop the proxy and kill any running sub-server processes when MCPHub exits.
             desktop.ShutdownRequested += (_, _) =>
             {
+                try { Services.GetService<RouterHost>()?.StopAsync().Wait(TimeSpan.FromSeconds(6)); }
+                catch { /* best effort */ }
                 try { Services.GetService<ProxyCoordinator>()?.StopAsync().Wait(TimeSpan.FromSeconds(3)); }
                 catch { /* best effort */ }
                 try { Services.GetService<IServiceProcessHost>()?.StopAllAsync().Wait(TimeSpan.FromSeconds(3)); }

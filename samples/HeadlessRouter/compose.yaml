@@ -1,0 +1,30 @@
+services:
+  router:
+    build:
+      context: ../..
+      dockerfile: samples/HeadlessRouter/Dockerfile
+    ports:
+      - "127.0.0.1:5801:5801"
+    environment:
+      MCPHUB_ROUTER_CONFIG: /config/router.json
+      MCPHUB_ROUTER_BIND: 0.0.0.0
+      MCPHUB_ROUTER_PORT: "5801"
+    volumes:
+      - ./router.json:/config/router.json:ro
+    secrets:
+      - agent_key
+      - model_key
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+secrets:
+  agent_key:
+    file: ./secrets/agent.key
+  model_key:
+    file: ./secrets/model.key

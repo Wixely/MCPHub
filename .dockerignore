@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.git/
+.vscode/
+artifacts/
+**/secrets/
+**/router.json
+**/*.user
+**/*.log

@@ -97,6 +97,14 @@ The buttons:
 
 > **First time opening an extra config file?** Some servers ship their secondary files as `.example.json` templates so an update can never overwrite your real data. Picking one from the Config dropdown renames the template into place and opens it, pre-filled with the right shape.
 
+### Router
+
+The **Router** page gives agents a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Create an input for each agent and copy its generated key into that agent's API-key setting.
+
+Choose a **global default** output, or give individual inputs an override. Route changes apply to new requests without changing agent configuration; requests already streaming finish on their original output. The Router is off by default and listens only on loopback, at `http://127.0.0.1:5801/v1` unless you change the port.
+
+See [Model Router setup and supported APIs](docs/model-router.md) for streaming support, credential storage, and compatibility limits.
+
 ### Diagnostics
 
 Every connected server and the tool calls it exposes through the proxy. This is where you confirm your client really can see what you think it can — expand a server to list its calls, or filter by name across all of them.

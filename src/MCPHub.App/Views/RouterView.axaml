@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             x:Class="MCPHub.App.Views.RouterView"
+             x:DataType="vm:RouterViewModel">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="RouterEditorBackground" Color="#08000000"/>
+          <SolidColorBrush x:Key="RouterEditorBorder" Color="#40000000"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="RouterEditorBackground" Color="#10FFFFFF"/>
+          <SolidColorBrush x:Key="RouterEditorBorder" Color="#40FFFFFF"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+  <DockPanel Margin="24">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+        <TextBlock Text="Model Router" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="Connect agents once. Choose their model destinations here." Opacity="0.65"/>
+        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+      </StackPanel>
+  <ScrollViewer>
+    <StackPanel Spacing="18" IsEnabled="{Binding IsIdle}">
+      <Border Background="#14000000" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+            <StackPanel Spacing="3">
+              <TextBlock Text="{Binding EndpointUrl}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="15"/>
+              <TextBlock Text="{Binding RunState}" TextWrapping="Wrap" Opacity="0.7"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Copy URL" Click="OnCopyUrl"/>
+            <Button Grid.Column="2" Content="{Binding ToggleText}" Command="{Binding ToggleCommand}"/>
+          </Grid>
+          <WrapPanel Orientation="Horizontal">
+            <TextBlock Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="120" IsEnabled="{Binding IsStopped}" Margin="0,0,16,0"/>
+            <CheckBox Content="Start when MCPHub launches" IsChecked="{Binding StartOnLaunch}" Margin="0,0,16,0"/>
+            <Button Content="Save listener" Command="{Binding SaveListenerCommand}"/>
+          </WrapPanel>
+          <TextBlock Text="Local connections only. Set each agent's API base URL to the address above and use its input key as the API key."
+                     FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="Global default" FontWeight="SemiBold" FontSize="16"/>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <ComboBox ItemsSource="{Binding DefaultChoices}" SelectedItem="{Binding DefaultOutput}" HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:RouterChoice"><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Grid.Column="1" Content="Apply default" Command="{Binding SaveDefaultCommand}"/>
+        </Grid>
+        <TextBlock Text="Used by inputs without an override. Changing it leaves per-agent overrides intact." FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding SavedDefaultSummary}" TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="Model outputs" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Add output" Command="{Binding NewOutputCommand}" IsEnabled="{Binding !IsOutputEditorOpen}"/>
+        </Grid>
+        <TextBlock Text="Saved destinations for model requests. Choose Edit to change an existing output." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="No outputs yet. Add an output to connect a model provider." IsVisible="{Binding HasNoOutputs}" TextWrapping="Wrap"/>
+        <ItemsControl ItemsSource="{Binding OutputRows}" IsEnabled="{Binding !IsOutputEditorOpen}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RouterOutputRow">
+              <Border BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="0,0,0,1" Padding="12,10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding BaseUrl}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ModelSummary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Edit" Command="{Binding EditCommand}" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border x:Name="OutputEditor" IsVisible="{Binding IsOutputEditorOpen}" Background="{DynamicResource RouterEditorBackground}"
+                BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="1" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="10">
+        <TextBlock Text="{Binding OutputEditorTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock Text="Changes stay in this form until you save." FontSize="12" Opacity="0.65"/>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+          <TextBlock Text="Name"/>
+          <TextBlock Grid.Column="1" Text="API base URL (include /v1 if required)"/>
+          <TextBox Grid.Row="1" Text="{Binding OutputName}" Watermark="Local model"/>
+          <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OutputBaseUrl}" Watermark="http://localhost:8000/v1"/>
+          <TextBlock Grid.Row="2" Text="Model sent to provider (optional)"/>
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="Upstream bearer key (optional)"/>
+          <TextBox Grid.Row="3" Text="{Binding OutputModel}" Watermark="Leave blank to use the agent's model"/>
+          <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding OutputApiKey}" PasswordChar="●" Watermark="Enter a key to replace the stored key"/>
+        </Grid>
+        <TextBlock Text="The model setting applies only after an agent is routed to this output. It does not assign any agents."
+                   FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding CredentialStatus}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        <CheckBox Content="Clear stored upstream key on save" IsChecked="{Binding ClearOutputKey}" IsVisible="{Binding HasOutput}"/>
+        <WrapPanel>
+          <Button Content="{Binding OutputSaveText}" Command="{Binding SaveOutputCommand}" Margin="0,0,8,0"/>
+          <Button Content="Cancel" Command="{Binding CancelOutputCommand}" Margin="0,0,24,0"/>
+          <Button Content="Remove this output" Command="{Binding RemoveOutputCommand}" IsVisible="{Binding HasOutput}"/>
+        </WrapPanel>
+        </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="Agents" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Add agent" Command="{Binding NewInputCommand}" IsEnabled="{Binding !IsInputEditorOpen}"/>
+        </Grid>
+        <TextBlock Text="Each saved agent has its own API key. Routes below reflect saved settings." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="No agents yet. Add an agent to generate its API key." IsVisible="{Binding HasNoInputs}" TextWrapping="Wrap"/>
+        <ItemsControl ItemsSource="{Binding InputRows}" IsEnabled="{Binding !IsInputEditorOpen}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RouterInputRow">
+              <Border BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="0,0,0,1" Padding="12,10">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding RouteSummary}" FontSize="12" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding State}" Opacity="0.65" VerticalAlignment="Center"/>
+                  <Button Grid.Column="2" Content="Edit" Command="{Binding EditCommand}" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border x:Name="InputEditor" IsVisible="{Binding IsInputEditorOpen}" Background="{DynamicResource RouterEditorBackground}"
+                BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="1" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="10">
+        <TextBlock Text="{Binding InputEditorTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBlock Text="Changes stay in this form until you save." FontSize="12" Opacity="0.65"/>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="6">
+          <TextBlock Text="Agent name"/>
+          <TextBlock Grid.Column="1" Text="Destination output"/>
+          <TextBox Grid.Row="1" Text="{Binding InputName}" Watermark="My coding agent"/>
+          <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding InputChoices}" SelectedItem="{Binding InputOutput}" HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:RouterChoice"><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+        </Grid>
+        <TextBlock Text="{Binding InputRoutePreview}" TextWrapping="Wrap"/>
+        <CheckBox Content="Agent enabled" IsChecked="{Binding InputEnabled}" IsVisible="{Binding HasInput}"/>
+        <WrapPanel>
+          <Button Content="{Binding InputSaveText}" Command="{Binding SaveInputCommand}" Margin="0,0,8,0"/>
+          <Button Content="Cancel" Command="{Binding CancelInputCommand}" Margin="0,0,24,0"/>
+          <Button Content="Remove this agent" Command="{Binding RemoveInputCommand}" IsVisible="{Binding HasInput}"/>
+        </WrapPanel>
+        <Border IsVisible="{Binding HasInput}" BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+          <StackPanel Spacing="6">
+            <TextBlock Text="API key" FontWeight="SemiBold"/>
+            <TextBlock Text="Key rotation takes effect immediately and revokes the previous key. It does not save the form above." FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+            <Button Content="Rotate this agent's key" Command="{Binding RotateKeyCommand}"/>
+          </StackPanel>
+        </Border>
+        </StackPanel>
+        </Border>
+        <Border x:Name="GeneratedKeyCard" IsVisible="{Binding HasGeneratedKey}" Background="{DynamicResource RouterEditorBackground}" CornerRadius="6" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding GeneratedKeyNotice}" TextWrapping="Wrap"/>
+            <TextBox Text="{Binding GeneratedKey, Mode=OneWay}" IsReadOnly="True" PasswordChar="●"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Copy new key" Click="OnCopyKey"/>
+              <Button Content="Dismiss key" Command="{Binding DismissKeyCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+  </DockPanel>
+</UserControl>

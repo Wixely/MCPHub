@@ -15,6 +15,20 @@
       "requireExactSource": false
     },
     {
+      "name": "Run/Debug Model Router (headless)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build headless router",
+      "program": "${workspaceFolder}/samples/HeadlessRouter/bin/Debug/net10.0/HeadlessRouter.dll",
+      "cwd": "${workspaceFolder}/samples/HeadlessRouter",
+      "env": {
+        "MCPHUB_ROUTER_CONFIG": "${workspaceFolder}/samples/HeadlessRouter/router.example.json",
+        "MCPHUB_ROUTER_BIND": "127.0.0.1",
+        "MCPHUB_ROUTER_PORT": "15801"
+      },
+      "console": "integratedTerminal"
+    },
+    {
       // Attach to an already-running MCPHub.exe (e.g. one started via `dotnet run`).
       "name": "Attach to MCPHub",
       "type": "coreclr",

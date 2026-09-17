@@ -11,6 +11,7 @@ using MCPHub.Core.Management;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
 using MCPHub.Core.Recipes;
+using MCPHub.Core.Routing;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
@@ -37,6 +38,9 @@ public static class Composition
         services.AddSingleton<IAppPaths, AppPaths>();
         services.AddSingleton<ISettingsStore, SettingsStore>();
         services.AddSingleton<ISecretStore, SecretStore>();
+        services.AddSingleton<RouterStore>();
+        services.AddSingleton<IRouterConfigurationSource>(sp => sp.GetRequiredService<RouterStore>());
+        services.AddSingleton<RouterHost>();
         services.AddTransient<GithubAuthHandler>();
 
         // Core infrastructure + service manager
@@ -138,6 +142,7 @@ public static class Composition
         services.AddSingleton<SlopworksViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<ProxyViewModel>();
+        services.AddSingleton<RouterViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<RecipesViewModel>();
         services.AddSingleton<SettingsViewModel>();

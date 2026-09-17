@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishIISAssets>false</PublishIISAssets>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MCPHub.Core/MCPHub.Core.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
+    <None Update="router.example.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

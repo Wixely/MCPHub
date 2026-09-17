@@ -21,6 +21,8 @@
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.9" />
 
     <!-- Model Context Protocol SDK -->
     <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />

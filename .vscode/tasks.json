@@ -2,6 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "build headless router",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/samples/HeadlessRouter/HeadlessRouter.csproj", "-c", "Debug"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": "$msCompile"
+    },
+    {
       "label": "build",
       "detail": "Build the solution in Debug for the MCPHub launch configuration",
       "command": "dotnet",

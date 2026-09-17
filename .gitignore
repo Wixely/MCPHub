@@ -47,3 +47,6 @@ Thumbs.db
 servers/
 downloads/
 *.bak-*
+# Local headless Router deployment configuration and credentials.
+/samples/HeadlessRouter/router.json
+/samples/HeadlessRouter/secrets/
