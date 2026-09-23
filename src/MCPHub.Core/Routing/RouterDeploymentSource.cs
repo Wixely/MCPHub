@@ -80,7 +80,8 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
         var portText = _environment("MCPHUB_ROUTER_PORT");
         var port = portText is null ? config.Port : int.Parse(portText, NumberStyles.None, CultureInfo.InvariantCulture);
         // MCPHUB_ROUTER_BIND wins over the file, so one image can serve loopback or the container network.
-        var bindAddress = _environment("MCPHUB_ROUTER_BIND") ?? config.BindAddress;
+        // Coerced, so a deployment file written before this setting existed still loads.
+        var bindAddress = RouterConfigurationRules.CoerceBindAddress(_environment("MCPHUB_ROUTER_BIND") ?? config.BindAddress);
         var keys = new Dictionary<string, string?>(StringComparer.Ordinal);
         var outputs = config.Outputs.Select(o =>
         {

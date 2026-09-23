@@ -102,6 +102,14 @@ public sealed partial class RouterViewModel : ViewModelBase
     public string EndpointUrl => _host.EndpointUrl;
     public string ToggleText => IsRunning ? "Stop router" : "Start router";
     public string RunState => _store.LoadError ?? _host.LastError ?? (IsRunning ? "Running" : "Stopped");
+
+    /// <summary>
+    /// Why the stored configuration could not be read, if it could not. While this is set every save throws,
+    /// so the page has to say so outright — otherwise Add and Apply look simply broken.
+    /// </summary>
+    public string? ConfigurationError => _store.LoadError;
+
+    public bool HasConfigurationError => ConfigurationError is not null;
     public bool HasOutput => SelectedOutput is not null;
     public bool HasInput => SelectedInput is not null;
     public bool HasGeneratedKey => GeneratedKey.Length > 0;

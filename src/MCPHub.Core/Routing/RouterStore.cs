@@ -22,6 +22,9 @@ public sealed class RouterStore : IRouterConfigurationSource
                 ? JsonSerializer.Deserialize(File.ReadAllText(_path), RouterJsonContext.Default.RouterConfiguration)
                     ?? throw new InvalidDataException("Router configuration is empty.")
                 : new();
+            // Settings added after a file was written arrive absent, not defaulted. Filling the bind address
+            // in here means the rest of the app only ever sees a concrete one, and the next save records it.
+            _current = _current with { BindAddress = RouterConfigurationRules.CoerceBindAddress(_current.BindAddress) };
             RouterConfigurationRules.Validate(_current);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)

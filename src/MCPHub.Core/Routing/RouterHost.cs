@@ -334,10 +334,11 @@ public sealed class RouterHost : IAsyncDisposable
         finally { ArrayPool<byte>.Shared.Return(buffer, clearArray: true); }
     }
 
-    private static string NormalizeOrLoopback(string value)
+    private static string NormalizeOrLoopback(string? value)
     {
         // A snapshot from an older router.json has no bind address at all; loopback is the safe reading.
-        try { return RouterConfigurationRules.NormalizeBindAddress(value); }
+        // A present-but-unusable one should not stop the host starting either, so it falls back too.
+        try { return RouterConfigurationRules.CoerceBindAddress(value); }
         catch (ArgumentException) { return RouterConfigurationRules.Loopback; }
     }
 

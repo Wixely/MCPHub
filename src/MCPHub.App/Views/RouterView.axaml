@@ -27,6 +27,16 @@
       </StackPanel>
   <ScrollViewer>
     <StackPanel Spacing="18" IsEnabled="{Binding IsIdle}">
+      <Border IsVisible="{Binding HasConfigurationError}" Background="#33F85149" BorderBrush="#66F85149"
+              BorderThickness="1" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Router configuration is not loaded" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding ConfigurationError}" TextWrapping="Wrap"/>
+          <TextBlock Text="Until it is, adding or changing outputs and agents will not save — the existing file is left untouched rather than overwritten."
+                     FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
+
       <Border Background="#14000000" CornerRadius="8" Padding="16">
         <StackPanel Spacing="10">
           <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">

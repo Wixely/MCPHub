@@ -18,7 +18,7 @@ public static class RouterConfigurationRules
     {
         if (c.SchemaVersion != 1) throw new ArgumentException("Unsupported router configuration version.");
         if (c.Port is < 1024 or > 65535) throw new ArgumentException("Choose a router port between 1024 and 65535.");
-        NormalizeBindAddress(c.BindAddress);
+        CoerceBindAddress(c.BindAddress);
         if (c.Inputs is null || c.Outputs is null || c.Inputs.Length > 256 || c.Outputs.Length > 256)
             throw new ArgumentException("Router supports up to 256 inputs and outputs.");
         if (c.Inputs.Any(i => i is null) || c.Outputs.Any(o => o is null)) throw new ArgumentException("Invalid router entries.");
@@ -65,6 +65,17 @@ public static class RouterConfigurationRules
 
     /// <inheritdoc cref="ParseBindAddress"/>
     public static string NormalizeBindAddress(string value) => ParseBindAddress(value).ToString();
+
+    /// <summary>
+    /// The bind address to use for a <em>stored</em> configuration, where absence is not a mistake: every
+    /// <c>router.json</c> written before this setting existed has no bind address at all, and refusing to
+    /// load one would cost the user their whole routing table over a field they never chose. Missing and
+    /// blank both mean loopback, which is what those files were doing. A value that is present but is not an
+    /// address is still an error — that is a real mistake, and silently ignoring it would bind somewhere the
+    /// operator did not ask for.
+    /// </summary>
+    public static string CoerceBindAddress(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? Loopback : NormalizeBindAddress(value);
 
     /// <summary>Whether <paramref name="address"/> is a wildcard, i.e. every interface rather than one.</summary>
     public static bool IsWildcard(string address) =>

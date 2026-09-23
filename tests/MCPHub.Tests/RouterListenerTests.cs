@@ -35,6 +35,54 @@ public sealed class RouterListenerTests
         Assert.Equal("0.0.0.0", fixture.Store.Snapshot.BindAddress);
     }
 
+    [Theory]
+    // Written by a version before the bind address existed: the key is simply absent.
+    [InlineData("""{"SchemaVersion":1,"Port":5801,"StartOnLaunch":false,"DefaultOutputId":null,"Inputs":[],"Outputs":[]}""")]
+    // Hand-edited, or written by a round trip that nulled it.
+    [InlineData("""{"SchemaVersion":1,"Port":5801,"BindAddress":null,"StartOnLaunch":false,"Inputs":[],"Outputs":[]}""")]
+    [InlineData("""{"SchemaVersion":1,"Port":5801,"BindAddress":"","StartOnLaunch":false,"Inputs":[],"Outputs":[]}""")]
+    public void A_config_without_a_bind_address_loads_as_loopback_rather_than_failing(string json)
+    {
+        using var fixture = new RouterFixture();
+        File.WriteAllText(Path.Combine(fixture.SettingsDirectory, "router.json"), json);
+
+        var store = new RouterStore(fixture);
+
+        // Losing an entire routing table to a field that did not exist when the file was written is the
+        // worst possible reading of a missing value.
+        Assert.Null(store.LoadError);
+        Assert.Equal("127.0.0.1", store.Snapshot.BindAddress);
+    }
+
+    [Fact]
+    public void An_upgraded_config_keeps_its_outputs_and_can_still_be_saved()
+    {
+        using var fixture = new RouterFixture();
+        File.WriteAllText(Path.Combine(fixture.SettingsDirectory, "router.json"), """
+            {
+              "SchemaVersion": 1,
+              "Port": 5801,
+              "StartOnLaunch": false,
+              "DefaultOutputId": null,
+              "Inputs": [],
+              "Outputs": [
+                { "Id": "abc123", "Name": "Existing", "BaseUrl": "http://127.0.0.1:8000/v1/", "Model": null, "ProtectedApiKey": null }
+              ]
+            }
+            """);
+
+        var store = new RouterStore(fixture);
+
+        Assert.Null(store.LoadError);
+        Assert.Equal("Existing", Assert.Single(store.Snapshot.Outputs).Name);
+
+        // A load error would have made every subsequent write throw, which is what "the buttons do nothing"
+        // looks like from the Router page.
+        var agent = store.AddInput("Agent", null);
+        Assert.NotNull(store.Resolve(agent.Key));
+        Assert.Equal("127.0.0.1", new RouterStore(fixture).Snapshot.BindAddress);
+    }
+
     [Fact]
     public async Task Endpoint_url_is_dialable_even_when_bound_to_every_interface()
     {
