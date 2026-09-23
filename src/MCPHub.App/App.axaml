@@ -47,6 +47,7 @@
           <NativeMenu>
             <NativeMenuItem Header="Open MCPHub" Click="OnTrayOpen" />
             <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Restart MCPHub" Click="OnTrayRestart" />
             <NativeMenuItem Header="Exit" Click="OnTrayExit" />
           </NativeMenu>
         </TrayIcon.Menu>

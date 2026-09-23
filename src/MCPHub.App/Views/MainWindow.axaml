@@ -34,8 +34,17 @@
       </DockPanel>
     </Border>
 
-    <!-- Active page -->
-    <ContentControl Grid.Column="1" Content="{Binding CurrentPage}"/>
+    <!-- Active page, under a banner shown only when a tray Restart could not start a replacement -->
+    <DockPanel Grid.Column="1">
+      <Border DockPanel.Dock="Top" IsVisible="{Binding HasRestartFailure}"
+              Background="#33F85149" BorderBrush="#66F85149" BorderThickness="0,0,0,1" Padding="16,10">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Text="{Binding RestartFailure}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Dismiss" Command="{Binding DismissRestartFailureCommand}" VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
+      <ContentControl Content="{Binding CurrentPage}"/>
+    </DockPanel>
 
   </Grid>
 </Window>
