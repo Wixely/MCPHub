@@ -138,41 +138,53 @@ public static class InstanceActivation
             }
         }
 
-        // One connection at a time, re-created after each: a second launch is a rare, brief event, and the
-        // client's connect call waits out the gap between accepts.
         private static NamedPipeServerStream CreateServer(string channelName) => new(
             channelName, PipeDirection.InOut, maxNumberOfServerInstances: 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
+        /// <summary>
+        /// Serves one launch at a time, for the life of the process. The same server instance is reused and
+        /// merely disconnected between clients, never disposed and re-created: on Unix a named pipe is a
+        /// socket file that is unlinked when the stream closes, so re-creating per connection leaves a window
+        /// in which the channel does not exist — the second launch of a session would find nothing there.
+        /// </summary>
         private async Task AcceptLoopAsync(NamedPipeServerStream first, CancellationToken cancellationToken)
         {
-            var next = first;
-            while (!cancellationToken.IsCancellationRequested)
+            var server = first;
+            try
             {
-                try
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    using var server = next;
-                    await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    await ServeAsync(server, cancellationToken).ConfigureAwait(false);
-                    next = CreateServer(_channelName);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
-                {
-                    // A dropped client, or a transient failure to re-open: try again rather than giving up the
-                    // channel for the life of the process.
-                    try { await Task.Delay(250, cancellationToken).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { return; }
-
-                    try { next = CreateServer(_channelName); }
-                    catch (Exception retry) when (retry is IOException or UnauthorizedAccessException)
+                    try
                     {
-                        return; // The channel is not coming back; a second launch falls back to its message.
+                        await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                        await ServeAsync(server, cancellationToken).ConfigureAwait(false);
+                        if (server.IsConnected)
+                            server.Disconnect();
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException)
+                    {
+                        // A client that dropped mid-handshake leaves this instance unusable, so replace it
+                        // rather than giving up the channel for the life of the process.
+                        server.Dispose();
+                        try { await Task.Delay(250, cancellationToken).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+
+                        try { server = CreateServer(_channelName); }
+                        catch (Exception retry) when (retry is IOException or UnauthorizedAccessException)
+                        {
+                            return; // Not coming back; a second launch falls back to its message.
+                        }
                     }
                 }
+            }
+            finally
+            {
+                server.Dispose();
             }
         }
 

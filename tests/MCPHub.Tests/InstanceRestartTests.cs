@@ -82,21 +82,28 @@ public sealed class InstanceRestartTests
     [Fact]
     public void Running_under_dotnet_is_recognised_so_restart_refuses_instead_of_closing_for_good()
     {
+        // Paths are built for the running platform on purpose: '\' is a directory separator on Windows and
+        // an ordinary filename character on Unix, so a hardcoded Windows path would not parse as a path on
+        // Linux. Environment.ProcessPath is always native, which is the only input this ever sees.
+        var hostDirectory = OperatingSystem.IsWindows() ? @"C:\Program Files\dotnet" : "/usr/bin";
+        var appDirectory = OperatingSystem.IsWindows() ? @"C:\sbin\MCPHub" : "/opt/mcphub";
+        var hostName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var appName = OperatingSystem.IsWindows() ? "MCPHub.exe" : "MCPHub";
+
         // dotnet run / dotnet MCPHub.dll: Environment.ProcessPath is the host, and re-launching it with
         // MCPHub's arguments would start dotnet, fail, and leave nothing behind once MCPHub had shut down.
-        Assert.True(InstanceRestart.IsLaunchedByAHost(@"C:\Program Files\dotnet\dotnet.exe", "MCPHub"));
-        Assert.True(InstanceRestart.IsLaunchedByAHost("/usr/bin/dotnet", "MCPHub"));
+        Assert.True(InstanceRestart.IsLaunchedByAHost(Path.Combine(hostDirectory, hostName), "MCPHub"));
 
         // A published build runs from its own apphost, whatever the extension or casing.
-        Assert.False(InstanceRestart.IsLaunchedByAHost(@"C:\sbin\MCPHub\MCPHub.exe", "MCPHub"));
-        Assert.False(InstanceRestart.IsLaunchedByAHost("/opt/mcphub/mcphub", "MCPHub"));
+        Assert.False(InstanceRestart.IsLaunchedByAHost(Path.Combine(appDirectory, appName), "MCPHub"));
+        Assert.False(InstanceRestart.IsLaunchedByAHost(Path.Combine(appDirectory, appName.ToLowerInvariant()), "MCPHub"));
     }
 
     [Fact]
     public void An_unknown_executable_or_assembly_name_does_not_block_a_restart_on_a_guess()
     {
         Assert.False(InstanceRestart.IsLaunchedByAHost("", "MCPHub"));
-        Assert.False(InstanceRestart.IsLaunchedByAHost(@"C:\somewhere\MCPHub.exe", ""));
+        Assert.False(InstanceRestart.IsLaunchedByAHost(Path.Combine(Path.GetTempPath(), "MCPHub.exe"), ""));
     }
 
     [Fact]
