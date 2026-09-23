@@ -20,6 +20,28 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void A_settings_file_missing_newer_keys_keeps_their_defaults()
+    {
+        // The upgrade case: settings.json was written before a setting existed, so its key is simply absent.
+        // Reading it back as null/zero rather than the declared default is how a new setting breaks an
+        // existing install — see the Router's bind address, which did exactly that.
+        using var dir = new TempDir();
+        File.WriteAllText(Path.Combine(dir.Path, "settings.json"), """
+            {"SchemaVersion":1,"ProxyPort":5810,"Theme":"Dark"}
+            """);
+
+        var store = new SettingsStore(new FakeAppPaths(dir.Path), NullLogger<SettingsStore>.Instance);
+
+        Assert.Equal(5810, store.Current.ProxyPort);
+        Assert.Equal("Dark", store.Current.Theme);
+        Assert.Equal("127.0.0.1", store.Current.ProxyBindAddress);
+        Assert.Equal(PublishFlavor.SelfContained, store.Current.Flavor);
+        Assert.True(store.Current.StartProxyOnLaunch);
+        Assert.NotNull(store.Current.UserServers);
+        Assert.NotNull(store.Current.AutoStartServices);
+    }
+
+    [Fact]
     public async Task Settings_roundtrip_across_instances()
     {
         using var dir = new TempDir();
