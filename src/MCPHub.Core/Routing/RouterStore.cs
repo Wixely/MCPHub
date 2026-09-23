@@ -38,7 +38,12 @@ public sealed class RouterStore : IRouterConfigurationSource
         get { lock (_gate) return _current with { Inputs = [.. _current.Inputs], Outputs = [.. _current.Outputs] }; }
     }
 
-    public void Configure(int port, bool startOnLaunch) => Update(c => c with { Port = port, StartOnLaunch = startOnLaunch });
+    /// <summary>
+    /// Persists the listener settings. A running host keeps its current socket until it is restarted —
+    /// see <see cref="RouterHost.ApplyListenerAsync"/>, which saves and rebinds in one step.
+    /// </summary>
+    public void Configure(string bindAddress, int port, bool startOnLaunch) =>
+        Update(c => c with { BindAddress = RouterConfigurationRules.NormalizeBindAddress(bindAddress), Port = port, StartOnLaunch = startOnLaunch });
     public void SetDefault(string? outputId) => Update(c => c with { DefaultOutputId = EmptyToNull(outputId) });
 
     /// <summary>Null apiKey retains the stored key; empty apiKey explicitly clears it.</summary>
@@ -91,6 +96,63 @@ public sealed class RouterStore : IRouterConfigurationSource
     }
 
     public void RemoveInput(string id) => Update(c => c with { Inputs = c.Inputs.Where(i => i.Id != id).ToArray() });
+
+    /// <summary>
+    /// Replaces the whole routing table from a settings archive. Outputs arrive without credentials, so each
+    /// one's key is taken from <paramref name="apiKeys"/> when the archive carried it, and otherwise from the
+    /// output already stored under that id — which is what lets an unencrypted archive move a topology onto a
+    /// machine that already holds the keys. Listener settings are applied only when
+    /// <paramref name="includeListener"/> is set, so importing routes need not move someone else's port.
+    /// </summary>
+    public void Import(RouterConfiguration incoming, IReadOnlyDictionary<string, string>? apiKeys = null, bool includeListener = true)
+    {
+        ArgumentNullException.ThrowIfNull(incoming);
+        Update(current =>
+        {
+            var existing = current.Outputs.ToDictionary(o => o.Id, o => o.ProtectedApiKey, StringComparer.Ordinal);
+            var outputs = incoming.Outputs.Select(output => output with
+            {
+                Name = output.Name.Trim(),
+                BaseUrl = NormalizeBaseUrl(output.BaseUrl),
+                Model = EmptyToNull(output.Model),
+                ProtectedApiKey = apiKeys is not null && apiKeys.TryGetValue(output.Id, out var plain) && !string.IsNullOrWhiteSpace(plain)
+                    ? ProtectKey(plain)
+                    : existing.GetValueOrDefault(output.Id),
+            }).ToArray();
+
+            return current with
+            {
+                BindAddress = includeListener ? RouterConfigurationRules.NormalizeBindAddress(incoming.BindAddress) : current.BindAddress,
+                Port = includeListener ? incoming.Port : current.Port,
+                StartOnLaunch = includeListener ? incoming.StartOnLaunch : current.StartOnLaunch,
+                DefaultOutputId = incoming.DefaultOutputId,
+                Outputs = outputs,
+                Inputs = [.. incoming.Inputs],
+            };
+        });
+    }
+
+    /// <summary>
+    /// Every output's upstream key in plaintext, by output id, for writing into an encrypted archive. Keys
+    /// that cannot be unwrapped (saved by another user or on another OS) are left out rather than failing.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ExportApiKeys()
+    {
+        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var output in Snapshot.Outputs)
+        {
+            try
+            {
+                if (ReadApiKey(output) is { Length: > 0 } key)
+                    keys[output.Id] = key;
+            }
+            catch (Exception ex) when (ex is CryptographicException or FormatException)
+            {
+                // Unreadable here means unusable here; the destination machine cannot do better with it.
+            }
+        }
+        return keys;
+    }
 
     public RouterRoute? Resolve(string key)
     {

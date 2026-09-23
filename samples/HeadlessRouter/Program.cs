@@ -10,7 +10,8 @@ try
     var configPath = Environment.GetEnvironmentVariable("MCPHUB_ROUTER_CONFIG")
         ?? Path.Combine(AppContext.BaseDirectory, "router.example.json");
     var source = new RouterDeploymentSource(configPath);
-    var options = new RouterHostOptions { BindAddress = Environment.GetEnvironmentVariable("MCPHUB_ROUTER_BIND") ?? "127.0.0.1" };
+    // Null leaves the bind address to the configuration file, which applies MCPHUB_ROUTER_BIND itself.
+    var options = new RouterHostOptions();
     builder.Services.AddSingleton(source);
     builder.Services.AddSingleton<IRouterConfigurationSource>(source);
     builder.Services.AddSingleton(options);

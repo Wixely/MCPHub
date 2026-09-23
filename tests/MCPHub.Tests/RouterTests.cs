@@ -33,10 +33,11 @@ public sealed class RouterTests
         store.SetDefault(second);
         Assert.Equal(second, store.Resolve(shared.Key)!.Output!.Id);
         Assert.Equal(first, store.Resolve(pinned.Key)!.Output!.Id);
-        store.Configure(5805, true);
+        store.Configure("0.0.0.0", 5805, true);
         var reloaded = new RouterStore(fixture);
         Assert.True(reloaded.Snapshot.StartOnLaunch);
         Assert.Equal(5805, reloaded.Snapshot.Port);
+        Assert.Equal("0.0.0.0", reloaded.Snapshot.BindAddress);
         Assert.Equal(first, reloaded.Resolve(pinned.Key)!.Output!.Id);
         Assert.Equal("test-output-key", RouterStore.ReadApiKey(reloaded.Resolve(pinned.Key)!.Output!));
         var json = File.ReadAllText(Path.Combine(fixture.SettingsDirectory, "router.json"));

@@ -44,8 +44,8 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
         try
         {
             var next = Read();
-            if (next.Configuration.Port != Snapshot.Port)
-                throw new ArgumentException("Listener port changes require restart.");
+            if (next.Configuration.Port != Snapshot.Port || next.Configuration.BindAddress != Snapshot.BindAddress)
+                throw new ArgumentException("Listener address and port changes require restart.");
             Volatile.Write(ref _state, next);
             Volatile.Write(ref _reloadError, null);
             return true;
@@ -79,6 +79,8 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
             throw new ArgumentException("Invalid configuration.");
         var portText = _environment("MCPHUB_ROUTER_PORT");
         var port = portText is null ? config.Port : int.Parse(portText, NumberStyles.None, CultureInfo.InvariantCulture);
+        // MCPHUB_ROUTER_BIND wins over the file, so one image can serve loopback or the container network.
+        var bindAddress = _environment("MCPHUB_ROUTER_BIND") ?? config.BindAddress;
         var keys = new Dictionary<string, string?>(StringComparer.Ordinal);
         var outputs = config.Outputs.Select(o =>
         {
@@ -98,7 +100,7 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
                 KeyHash = i.KeyHash ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(secret!))),
             };
         }).ToArray();
-        var runtime = new RouterConfiguration { Port = port, Inputs = inputs, Outputs = outputs, DefaultOutputId = config.DefaultOutputId };
+        var runtime = new RouterConfiguration { Port = port, BindAddress = bindAddress, Inputs = inputs, Outputs = outputs, DefaultOutputId = config.DefaultOutputId };
         RouterConfigurationRules.Validate(runtime);
         return new(runtime, keys);
     }
@@ -128,6 +130,10 @@ public sealed record RouterDeploymentConfiguration
 {
     public int SchemaVersion { get; init; } = 1;
     public int Port { get; init; } = 5801;
+
+    /// <summary>Listener address; overridden by <c>MCPHUB_ROUTER_BIND</c>. Containers usually want <c>0.0.0.0</c>.</summary>
+    public string BindAddress { get; init; } = RouterConfigurationRules.Loopback;
+
     public string? DefaultOutputId { get; init; }
     public RouterDeploymentInput[] Inputs { get; init; } = [];
     public RouterDeploymentOutput[] Outputs { get; init; } = [];

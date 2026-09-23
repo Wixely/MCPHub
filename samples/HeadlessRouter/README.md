@@ -15,7 +15,7 @@ The executable supports interactive console use, Windows Service hosting through
 | Environment variable | Meaning |
 | --- | --- |
 | `MCPHUB_ROUTER_CONFIG` | Absolute path to deployment JSON; defaults to the empty example beside the executable |
-| `MCPHUB_ROUTER_BIND` | IPv4/IPv6 bind address; defaults to `127.0.0.1`; use `0.0.0.0` inside Docker |
+| `MCPHUB_ROUTER_BIND` | IPv4/IPv6 bind address; overrides the config file's `BindAddress`, which itself defaults to `127.0.0.1`; use `0.0.0.0` inside Docker |
 | `MCPHUB_ROUTER_PORT` | Optional port override, 1024–65535; otherwise JSON `Port` is used |
 
 Configuration is read-only. It does not use `AppPaths`, a user's desktop profile, `settings.json`, `router.json` from the desktop, or DPAPI. Relative secret file paths resolve against the deployment JSON directory, never the process working directory. Use absolute configuration paths for services.
@@ -28,6 +28,7 @@ Create your own `router.json` using this shape (property names are case-sensitiv
 {
   "SchemaVersion": 1,
   "Port": 5801,
+  "BindAddress": "127.0.0.1",
   "DefaultOutputId": "local-model",
   "Outputs": [
     {

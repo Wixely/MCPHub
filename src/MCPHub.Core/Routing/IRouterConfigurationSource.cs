@@ -11,5 +11,10 @@ public interface IRouterConfigurationSource
 /// <summary>Listener settings owned by the host, not the desktop editor.</summary>
 public sealed record RouterHostOptions
 {
-    public string BindAddress { get; init; } = "127.0.0.1";
+    /// <summary>
+    /// Pins the bind address for hosts whose deployment decides it (a container's <c>MCPHUB_ROUTER_BIND</c>,
+    /// say), overriding the configuration. <see langword="null"/> — the default — takes
+    /// <see cref="RouterConfiguration.BindAddress"/> instead, so the desktop can change it while running.
+    /// </summary>
+    public string? BindAddress { get; init; }
 }

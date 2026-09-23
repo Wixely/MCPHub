@@ -1,6 +1,7 @@
 {
   "SchemaVersion": 1,
   "Port": 5801,
+  "BindAddress": "127.0.0.1",
   "DefaultOutputId": null,
   "Inputs": [],
   "Outputs": []

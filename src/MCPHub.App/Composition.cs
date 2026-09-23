@@ -7,6 +7,7 @@ using MCPHub.Core.Agent;
 using MCPHub.Core.Slopworks;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Logging;
+using MCPHub.Core.Backup;
 using MCPHub.Core.Management;
 using MCPHub.Core.Models;
 using MCPHub.Core.Process;
@@ -40,8 +41,17 @@ public static class Composition
         services.AddSingleton<ISecretStore, SecretStore>();
         services.AddSingleton<RouterStore>();
         services.AddSingleton<IRouterConfigurationSource>(sp => sp.GetRequiredService<RouterStore>());
+        // Per-agent "last connected", persisted beside router.json so it survives a restart of MCPHub.
+        services.AddSingleton<RouterActivityLog>();
+        services.AddSingleton<IRouterActivityLog>(sp => sp.GetRequiredService<RouterActivityLog>());
+        // No RouterHostOptions is registered: the desktop takes its bind address from router.json, so the
+        // Router page can change it and rebind without restarting MCPHub.
         services.AddSingleton<RouterHost>();
+        services.AddSingleton<IRouterOutputTester>(_ => new RouterOutputTester());
         services.AddTransient<GithubAuthHandler>();
+
+        // Settings archive: selective export / import of configuration as a zip, optionally encrypted.
+        services.AddSingleton<ISettingsArchiveService, SettingsArchiveService>();
 
         // Core infrastructure + service manager
         services.AddSingleton<IInstalledManifestStore, InstalledManifestStore>();

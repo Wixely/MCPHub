@@ -50,6 +50,9 @@ public partial class App : Application
             {
                 try { Services.GetService<RouterHost>()?.StopAsync().Wait(TimeSpan.FromSeconds(6)); }
                 catch { /* best effort */ }
+                // Writes any "last connected" times still buffered, so they survive to the next launch.
+                try { Services.GetService<RouterActivityLog>()?.Flush(); }
+                catch { /* best effort */ }
                 try { Services.GetService<ProxyCoordinator>()?.StopAsync().Wait(TimeSpan.FromSeconds(3)); }
                 catch { /* best effort */ }
                 try { Services.GetService<IServiceProcessHost>()?.StopAllAsync().Wait(TimeSpan.FromSeconds(3)); }

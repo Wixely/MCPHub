@@ -20,21 +20,27 @@ public sealed class RouterHost : IAsyncDisposable
 {
     public const int MaxRequestBytes = 16 * 1024 * 1024;
     private readonly IRouterConfigurationSource _configuration;
-    private readonly IPAddress _bindAddress;
+    private readonly string? _bindOverride;
+    private readonly IRouterActivityLog _activity;
     private readonly ILogger<RouterHost> _logger;
     private readonly HttpClient _client;
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly SemaphoreSlim _requests = new(32, 32);
     private WebApplication? _app;
     private CancellationTokenSource? _shutdown;
+    private string? _boundAddress;
 
-    public RouterHost(IRouterConfigurationSource configuration, ILogger<RouterHost> logger, RouterHostOptions? options = null)
+    public RouterHost(
+        IRouterConfigurationSource configuration,
+        ILogger<RouterHost> logger,
+        RouterHostOptions? options = null,
+        IRouterActivityLog? activity = null)
     {
         _configuration = configuration;
         _logger = logger;
-        if (!IPAddress.TryParse(options?.BindAddress ?? "127.0.0.1", out var bindAddress))
-            throw new ArgumentException("Router bind address must be an IPv4 or IPv6 address.");
-        _bindAddress = bindAddress;
+        _activity = activity ?? NullRouterActivityLog.Instance;
+        // A pinned override is validated now so a bad container setting fails at startup, not on first request.
+        _bindOverride = options?.BindAddress is { } pinned ? RouterConfigurationRules.NormalizeBindAddress(pinned) : null;
         _client = new HttpClient(new SocketsHttpHandler
         {
             AllowAutoRedirect = false, UseCookies = false, AutomaticDecompression = DecompressionMethods.None,
@@ -44,8 +50,27 @@ public sealed class RouterHost : IAsyncDisposable
 
     public bool IsRunning => _app is not null;
     public int Port { get; private set; }
-    public string BindAddress => _bindAddress.ToString();
-    public string EndpointUrl => new UriBuilder("http", BindAddress, IsRunning ? Port : _configuration.Snapshot.Port, "v1").Uri.AbsoluteUri.TrimEnd('/');
+
+    /// <summary>
+    /// Address in force: what the listener actually bound while running, otherwise what the next start
+    /// would use. The two differ between changing the setting and restarting the listener.
+    /// </summary>
+    public string BindAddress => _boundAddress ?? ConfiguredBindAddress;
+
+    /// <summary>Bind address the next start will use — the pinned override, or the configured one.</summary>
+    public string ConfiguredBindAddress => _bindOverride ?? NormalizeOrLoopback(_configuration.Snapshot.BindAddress);
+
+    /// <summary>Whether the address in force accepts connections from beyond this machine.</summary>
+    public bool IsBoundToAllInterfaces => RouterConfigurationRules.IsWildcard(BindAddress);
+
+    /// <summary>
+    /// URL an agent on this machine uses. A wildcard bind has no dialable literal, so loopback stands in —
+    /// agents elsewhere on the network dial this machine's own address on the same port.
+    /// </summary>
+    public string EndpointUrl => new UriBuilder("http",
+        RouterConfigurationRules.ClientHost(BindAddress).Trim('[', ']'),
+        IsRunning ? Port : _configuration.Snapshot.Port, "v1").Uri.AbsoluteUri.TrimEnd('/');
+
     public string? LastError { get; private set; }
 
     public async Task StartConfiguredAsync()
@@ -68,11 +93,13 @@ public sealed class RouterHost : IAsyncDisposable
             if (IsRunning) return;
             if (_configuration.LoadError is not null) throw new InvalidOperationException(_configuration.LoadError);
             var port = portOverride ?? _configuration.Snapshot.Port;
+            // Read the bind address per start, so changing it and restarting the listener is enough.
+            var bindAddress = RouterConfigurationRules.ParseBindAddress(ConfiguredBindAddress);
             var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [] });
             builder.Logging.ClearProviders(); // Never log URLs, payloads, or credentials from routed requests.
             builder.WebHost.ConfigureKestrel(options =>
             {
-                options.Listen(_bindAddress, port);
+                options.Listen(bindAddress, port);
                 options.Limits.MaxRequestBodySize = MaxRequestBytes;
                 options.Limits.MaxConcurrentConnections = 64;
             });
@@ -89,8 +116,9 @@ public sealed class RouterHost : IAsyncDisposable
             Port = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()).Port;
             _shutdown = shutdown;
             _app = app;
+            _boundAddress = bindAddress.ToString();
             LastError = null;
-            _logger.LogInformation("Model router started on port {Port}.", Port);
+            _logger.LogInformation("Model router started on {BindAddress} port {Port}.", _boundAddress, Port);
         }
         finally { _lifecycle.Release(); }
     }
@@ -108,12 +136,62 @@ public sealed class RouterHost : IAsyncDisposable
             {
                 await _app.DisposeAsync().ConfigureAwait(false);
                 _app = null;
+                _boundAddress = null;
                 _shutdown.Dispose();
                 _shutdown = null;
             }
+            _activity.Flush();
             _logger.LogInformation("Model router stopped.");
         }
         finally { _lifecycle.Release(); }
+    }
+
+    /// <summary>
+    /// Persists listener settings through <paramref name="save"/> and, when the listener is already running,
+    /// rebinds it so the change is live — a socket cannot move while bound, so this is the closest thing to
+    /// applying in place, and it means no MCPHub restart. Returns whether the listener was rebound.
+    /// <para>
+    /// If the new address or port cannot be bound, the previous settings are restored and the listener is
+    /// brought back up on them before the error is rethrown, so a typo cannot leave agents with no Router.
+    /// </para>
+    /// </summary>
+    public async Task<bool> ApplyListenerAsync(Action save, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        var previous = _configuration.Snapshot;
+        var wasRunning = IsRunning;
+        save();
+
+        // Nothing to rebind when the saved settings are already the ones the live socket is using.
+        if (!wasRunning || (ConfiguredBindAddress == BindAddress && _configuration.Snapshot.Port == Port))
+            return false;
+
+        await StopAsync().ConfigureAwait(false);
+        try
+        {
+            await StartAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            await RestoreAsync(previous).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task RestoreAsync(RouterConfiguration previous)
+    {
+        if (_configuration is not RouterStore store) return;
+        try
+        {
+            store.Configure(previous.BindAddress, previous.Port, previous.StartOnLaunch);
+            await StartAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LastError = "Router is stopped: the new listener settings could not be bound and the previous ones could not be restored.";
+            _logger.LogWarning(ex, "Model router could not be restored after a rejected listener change.");
+        }
     }
 
     private async Task HandleAsync(HttpContext context, CancellationToken shutdown)
@@ -125,10 +203,15 @@ public sealed class RouterHost : IAsyncDisposable
             route = _configuration.Resolve(key);
         if (route is null)
         {
+            _activity.RecordRejection();
             context.Response.Headers.WWWAuthenticate = "Bearer";
             await ErrorAsync(context, 401, "invalid_api_key", "A valid enabled Router input key is required.");
             return;
         }
+
+        // Recorded on authentication rather than on success, so "last connected" answers "did this agent
+        // reach the hub at all" — which is the question asked when its requests start failing downstream.
+        _activity.RecordConnection(route.InputId);
 
         var path = context.Request.Path.Value;
         var allowed = HttpMethods.IsGet(context.Request.Method) && path == "/v1/models" ||
@@ -249,6 +332,13 @@ public sealed class RouterHost : IAsyncDisposable
             return body.ToArray();
         }
         finally { ArrayPool<byte>.Shared.Return(buffer, clearArray: true); }
+    }
+
+    private static string NormalizeOrLoopback(string value)
+    {
+        // A snapshot from an older router.json has no bind address at all; loopback is the safe reading.
+        try { return RouterConfigurationRules.NormalizeBindAddress(value); }
+        catch (ArgumentException) { return RouterConfigurationRules.Loopback; }
     }
 
     private static Task ErrorAsync(HttpContext context, int status, string code, string message)

@@ -101,7 +101,11 @@ The buttons:
 
 The **Router** page gives agents a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Create an input for each agent and copy its generated key into that agent's API-key setting.
 
-Choose a **global default** output, or give individual inputs an override. Route changes apply to new requests without changing agent configuration; requests already streaming finish on their original output. The Router is off by default and listens only on loopback, at `http://127.0.0.1:5801/v1` unless you change the port.
+Choose a **global default** output, or give individual inputs an override. Route changes apply to new requests without changing agent configuration; requests already streaming finish on their original output.
+
+**Test** an output to check it answers on its stored key before an agent depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each agent row shows when it last reached the Router and how many requests it has made.
+
+The Router is off by default and listens on `http://127.0.0.1:5801/v1`. Set **Bind address** to `0.0.0.0` to accept connections from your network, or to one interface's address to bind that network alone; **Apply listener** rebinds a running Router immediately, without restarting MCPHub.
 
 See [Model Router setup and supported APIs](docs/model-router.md) for streaming support, credential storage, and compatibility limits.
 
@@ -166,10 +170,12 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 | --- | --- |
 | **Shared servers folder** | Where servers are installed. Change it to put them on another drive. |
 | **Download self-contained builds** | On by default. Bundles the .NET runtime — bigger downloads, but nothing to install. Turn it off only if you already have the .NET runtime. |
-| **Proxy port / bind** | The aggregated endpoint. `127.0.0.1` keeps it on this machine; change the bind address to reach it from your network. |
+| **Proxy port / bind** | The aggregated endpoint. `127.0.0.1` keeps it on this machine; change the bind address to reach it from your network. Saving moves a running proxy straight onto the new address — no restart. |
 | **Agent management** | Off by default. Lets agents on the proxy list, start/stop/restart, install/update and check updates for the managed servers through `mcphub__*` tools — see [Letting agents manage servers](#letting-agents-manage-servers). Applies immediately, no Save needed. |
 | **System tray** | Whether minimising and closing hide to the tray instead of exiting. |
 | **GitHub token** | Optional. Lifts GitHub's 60-requests-per-hour limit on update checks. Stored encrypted (DPAPI on Windows). |
+| **Configuration files** | Opens `settings.json` in your editor, or the folder holding it alongside `secrets.json`, `router.json` and `recipes.json`. MCPHub reads `settings.json` at startup, so edit it with the app closed. |
+| **Back up and move settings** | Exports the categories you tick — general and proxy, user-added MCP servers, Router routes, recipes, agent and engine, appearance, tokens and keys — to a zip, and imports the same selectively. Give a password and every entry is encrypted (AES-256-GCM from a PBKDF2-SHA256 key); tokens and keys can only be exported with one, since they are re-wrapped for whichever machine imports them. |
 
 ## The servers it manages
 

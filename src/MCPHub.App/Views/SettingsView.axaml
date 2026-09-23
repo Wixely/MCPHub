@@ -81,10 +81,55 @@
         <TextBlock Text="A token is currently stored." Opacity="0.6" FontSize="12" IsVisible="{Binding HasStoredPat}"/>
       </StackPanel>
 
+      <StackPanel Spacing="6">
+        <TextBlock Text="Configuration files" FontWeight="SemiBold"/>
+        <TextBlock Text="settings.json sits beside secrets.json, router.json and recipes.json. MCPHub reads settings.json at startup, so edit it while the app is closed — or press Save above afterwards and your hand edits are replaced."
+                   Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Open settings.json" Command="{Binding OpenConfigFileCommand}"/>
+          <Button Content="Open config folder" Command="{Binding OpenConfigFolderCommand}"/>
+        </StackPanel>
+      </StackPanel>
+
       <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
         <Button Content="Save" Command="{Binding SaveCommand}"/>
         <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"/>
       </StackPanel>
+
+      <Border BorderBrush="#40808080" BorderThickness="0,1,0,0" Padding="0,16,0,0">
+        <StackPanel Spacing="8" IsEnabled="{Binding !IsArchiveBusy}">
+          <TextBlock Text="Back up and move settings" FontWeight="SemiBold"/>
+          <TextBlock Text="Writes the ticked categories to a zip you can keep or carry to another machine. Import reads a zip and applies only the categories you tick from what it contains."
+                     Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+
+          <ItemsControl ItemsSource="{Binding ArchiveCategories}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SettingsCategoryOption">
+                <StackPanel Margin="0,2">
+                  <CheckBox Content="{Binding Title}" IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsAvailable}"/>
+                  <TextBlock Text="{Binding Description}" Margin="28,0,0,0" Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+                  <TextBlock Text="Not in the archive you selected." Margin="28,0,0,0" Opacity="0.6" FontSize="12"
+                             IsVisible="{Binding !IsAvailable}"/>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+            <TextBlock Grid.Column="0" Text="Password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Grid.Column="1" Text="{Binding ArchivePassword}" PasswordChar="•"
+                     Watermark="Optional — required to include tokens and keys"/>
+          </Grid>
+          <TextBlock Text="With a password every entry is encrypted with AES-256-GCM from a PBKDF2-SHA256 key. Lose it and the archive cannot be recovered. Without one, the archive is plain files and cannot include tokens or keys."
+                     Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+            <Button Content="Export…" Click="OnExportSettings"/>
+            <Button Content="Import…" Click="OnImportSettings"/>
+          </StackPanel>
+          <TextBlock Text="{Binding ArchiveStatus}" Opacity="0.75" FontSize="12" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Border>
 
     </StackPanel>
   </ScrollViewer>

@@ -141,6 +141,123 @@ public sealed class RouterViewModelTests
         Assert.Contains("base URL", f.Vm.StatusMessage);
     }
 
+    [Fact]
+    public async Task Bind_address_presets_and_apply_persist_without_stopping_the_router_first()
+    {
+        await using var f = new Fixture();
+        Assert.Equal("127.0.0.1", f.Vm.BindAddress);
+
+        f.Vm.UseAllInterfacesCommand.Execute(null);
+        Assert.Equal("0.0.0.0", f.Vm.BindAddress);
+        Assert.Contains("Every network interface", f.Vm.ListenerSummary);
+
+        f.Vm.Port = 5812;
+        await f.Vm.ApplyListenerCommand.ExecuteAsync(null);
+
+        Assert.Equal("0.0.0.0", f.Store.Snapshot.BindAddress);
+        Assert.Equal(5812, f.Store.Snapshot.Port);
+
+        f.Vm.UseLoopbackCommand.Execute(null);
+        Assert.Contains("This machine only", f.Vm.ListenerSummary);
+    }
+
+    [Fact]
+    public async Task An_invalid_bind_address_is_reported_and_the_saved_one_is_restored_in_the_box()
+    {
+        await using var f = new Fixture();
+        f.Vm.BindAddress = "my-laptop";
+        await f.Vm.ApplyListenerCommand.ExecuteAsync(null);
+
+        Assert.Contains("IP address", f.Vm.StatusMessage);
+        Assert.Equal("127.0.0.1", f.Store.Snapshot.BindAddress);
+        Assert.Equal("127.0.0.1", f.Vm.BindAddress);
+    }
+
+    [Fact]
+    public async Task Agent_rows_show_never_connected_until_the_router_sees_their_key()
+    {
+        await using var f = new Fixture();
+        f.Vm.NewInputCommand.Execute(null);
+        f.Vm.InputName = "Coding agent";
+        f.Vm.SaveInputCommand.Execute(null);
+        var id = f.Store.Resolve(f.Vm.GeneratedKey)!.InputId;
+
+        Assert.Equal("Never connected", f.Vm.InputRows.Single().ActivitySummary);
+
+        f.Activity.RecordConnection(id);
+        f.Vm.RefreshActivity();
+        Assert.Contains("Last connected just now", f.Vm.InputRows.Single().ActivitySummary);
+        Assert.Contains("1 request", f.Vm.InputRows.Single().ActivitySummary);
+    }
+
+    [Fact]
+    public async Task Removing_an_agent_forgets_its_activity()
+    {
+        await using var f = new Fixture();
+        f.Vm.NewInputCommand.Execute(null);
+        f.Vm.InputName = "Coding agent";
+        f.Vm.SaveInputCommand.Execute(null);
+        var id = f.Store.Resolve(f.Vm.GeneratedKey)!.InputId;
+        f.Activity.RecordConnection(id);
+
+        f.Vm.InputRows.Single().EditCommand.Execute(null);
+        f.Vm.RemoveInputCommand.Execute(null);
+
+        Assert.False(f.Activity.Get(id).HasConnected);
+    }
+
+    [Fact]
+    public async Task Testing_an_output_records_its_verdict_on_the_row_and_survives_a_refresh()
+    {
+        await using var f = new Fixture();
+        f.AddOutput();
+        f.Tester.Result = new(false, "Nothing is listening on localhost:8000.", TimeSpan.FromMilliseconds(3));
+
+        await f.Vm.OutputRows.Single().TestCommand.ExecuteAsync(null);
+
+        var row = f.Vm.OutputRows.Single();
+        Assert.False(row.LastTestPassed);
+        Assert.True(row.HasTestResult);
+        Assert.Contains("Nothing is listening", row.TestSummary);
+        Assert.Contains("Nothing is listening", f.Vm.StatusMessage);
+
+        // A verdict is about the saved output, so an unrelated change must not silently drop it.
+        f.Vm.SaveDefaultCommand.Execute(null);
+        Assert.Contains("Nothing is listening", f.Vm.OutputRows.Single().TestSummary);
+    }
+
+    [Fact]
+    public async Task Editing_an_output_clears_the_verdict_that_described_its_old_settings()
+    {
+        await using var f = new Fixture();
+        f.AddOutput();
+        await f.Vm.OutputRows.Single().TestCommand.ExecuteAsync(null);
+        Assert.True(f.Vm.OutputRows.Single().HasTestResult);
+
+        f.Vm.OutputRows.Single().EditCommand.Execute(null);
+        f.Vm.OutputBaseUrl = "http://localhost:9999/v1";
+        f.Vm.SaveOutputCommand.Execute(null);
+
+        Assert.False(f.Vm.OutputRows.Single().HasTestResult);
+    }
+
+    [Fact]
+    public async Task Test_all_reports_how_many_outputs_failed()
+    {
+        await using var f = new Fixture();
+        f.AddOutput();
+        f.Vm.NewOutputCommand.Execute(null);
+        f.Vm.OutputName = "Second";
+        f.Vm.OutputBaseUrl = "http://localhost:8001/v1";
+        f.Vm.SaveOutputCommand.Execute(null);
+
+        f.Tester.Result = new(false, "Nothing is listening.", TimeSpan.Zero);
+        await f.Vm.TestAllOutputsCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, f.Tester.Tested.Count);
+        Assert.Contains("2 of 2 output(s) failed", f.Vm.StatusMessage);
+    }
+
     private sealed class Fixture : IAppPaths, IAsyncDisposable
     {
         public string SettingsDirectory { get; } = Path.Combine(Path.GetTempPath(), "mcphub-router-ui-tests", Guid.NewGuid().ToString("N"));
@@ -150,13 +267,16 @@ public sealed class RouterViewModelTests
         public string EnsureDirectory(string path) { Directory.CreateDirectory(path); return path; }
         public RouterStore Store { get; }
         public RouterHost Host { get; }
+        public RouterActivityLog Activity { get; }
+        public StubTester Tester { get; } = new();
         public RouterViewModel Vm { get; }
         public Fixture()
         {
             Directory.CreateDirectory(SettingsDirectory);
             Store = new(this);
-            Host = new(Store, NullLogger<RouterHost>.Instance);
-            Vm = new(Store, Host);
+            Activity = new(this, writeInterval: TimeSpan.Zero);
+            Host = new(Store, NullLogger<RouterHost>.Instance, activity: Activity);
+            Vm = new(Store, Host, Activity, Tester);
         }
         public void AddOutput()
         {
@@ -168,7 +288,21 @@ public sealed class RouterViewModelTests
         public async ValueTask DisposeAsync()
         {
             await Host.DisposeAsync();
+            Activity.Dispose();
             Directory.Delete(SettingsDirectory, recursive: true);
+        }
+    }
+
+    /// <summary>Returns a canned verdict so view-model tests never touch the network.</summary>
+    internal sealed class StubTester : IRouterOutputTester
+    {
+        public RouterOutputTestResult Result { get; set; } = new(true, "Reached the provider in 5ms.", TimeSpan.FromMilliseconds(5));
+        public List<string> Tested { get; } = [];
+
+        public Task<RouterOutputTestResult> TestAsync(RouterOutput output, CancellationToken cancellationToken = default)
+        {
+            Tested.Add(output.Id);
+            return Task.FromResult(Result);
         }
     }
 }

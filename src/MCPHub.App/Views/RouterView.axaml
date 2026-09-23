@@ -1,10 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MCPHub.App.ViewModels"
+             xmlns:conv="using:MCPHub.App.Converters"
              x:Class="MCPHub.App.Views.RouterView"
              x:DataType="vm:RouterViewModel">
   <UserControl.Resources>
     <ResourceDictionary>
+      <conv:TestResultToBrushConverter x:Key="TestResultToBrush"/>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="RouterEditorBackground" Color="#08000000"/>
@@ -36,12 +38,18 @@
             <Button Grid.Column="2" Content="{Binding ToggleText}" Command="{Binding ToggleCommand}"/>
           </Grid>
           <WrapPanel Orientation="Horizontal">
+            <TextBlock Text="Bind address" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Text="{Binding BindAddress}" Width="150" Watermark="127.0.0.1" Margin="0,0,6,0"
+                     ToolTip.Tip="An IP address of this machine. 127.0.0.1 keeps the Router local; 0.0.0.0 accepts connections on every interface."/>
+            <Button Content="This machine" Command="{Binding UseLoopbackCommand}" Margin="0,0,4,0"/>
+            <Button Content="All interfaces" Command="{Binding UseAllInterfacesCommand}" Margin="0,0,16,0"/>
             <TextBlock Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="120" IsEnabled="{Binding IsStopped}" Margin="0,0,16,0"/>
+            <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="120" Margin="0,0,16,0"/>
             <CheckBox Content="Start when MCPHub launches" IsChecked="{Binding StartOnLaunch}" Margin="0,0,16,0"/>
-            <Button Content="Save listener" Command="{Binding SaveListenerCommand}"/>
+            <Button Content="Apply listener" Command="{Binding ApplyListenerCommand}"/>
           </WrapPanel>
-          <TextBlock Text="Local connections only. Set each agent's API base URL to the address above and use its input key as the API key."
+          <TextBlock Text="{Binding ListenerSummary}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+          <TextBlock Text="Set each agent's API base URL to the address above and use its input key as the API key."
                      FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         </StackPanel>
       </Border>
@@ -61,21 +69,28 @@
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
           <TextBlock Text="Model outputs" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
-          <Button Grid.Column="1" Content="Add output" Command="{Binding NewOutputCommand}" IsEnabled="{Binding !IsOutputEditorOpen}"/>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="Test all" Command="{Binding TestAllOutputsCommand}" IsEnabled="{Binding !HasNoOutputs}"
+                    ToolTip.Tip="Asks every output for its model list using the stored upstream key. No tokens are generated, so testing costs nothing."/>
+            <Button Content="Add output" Command="{Binding NewOutputCommand}" IsEnabled="{Binding !IsOutputEditorOpen}"/>
+          </StackPanel>
         </Grid>
-        <TextBlock Text="Saved destinations for model requests. Choose Edit to change an existing output." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="Saved destinations for model requests. Test checks that an output answers on its stored key; Edit changes it." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
         <TextBlock Text="No outputs yet. Add an output to connect a model provider." IsVisible="{Binding HasNoOutputs}" TextWrapping="Wrap"/>
         <ItemsControl ItemsSource="{Binding OutputRows}" IsEnabled="{Binding !IsOutputEditorOpen}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:RouterOutputRow">
               <Border BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="0,0,0,1" Padding="12,10">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
                   <StackPanel Spacing="3">
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding BaseUrl}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
                     <TextBlock Text="{Binding ModelSummary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding TestSummary}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasTestResult}"
+                               Foreground="{Binding LastTestPassed, Converter={StaticResource TestResultToBrush}}"/>
                   </StackPanel>
-                  <Button Grid.Column="1" Content="Edit" Command="{Binding EditCommand}" VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Content="Test" Command="{Binding TestCommand}" VerticalAlignment="Center" IsEnabled="{Binding !IsTesting}"/>
+                  <Button Grid.Column="2" Content="Edit" Command="{Binding EditCommand}" VerticalAlignment="Center"/>
                 </Grid>
               </Border>
             </DataTemplate>
@@ -114,7 +129,8 @@
           <TextBlock Text="Agents" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
           <Button Grid.Column="1" Content="Add agent" Command="{Binding NewInputCommand}" IsEnabled="{Binding !IsInputEditorOpen}"/>
         </Grid>
-        <TextBlock Text="Each saved agent has its own API key. Routes below reflect saved settings." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="Each saved agent has its own API key. Routes reflect saved settings, and each row shows when that agent last reached the Router." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding RejectionSummary}" IsVisible="{Binding HasRejections}" FontSize="12" TextWrapping="Wrap"/>
         <TextBlock Text="No agents yet. Add an agent to generate its API key." IsVisible="{Binding HasNoInputs}" TextWrapping="Wrap"/>
         <ItemsControl ItemsSource="{Binding InputRows}" IsEnabled="{Binding !IsInputEditorOpen}">
           <ItemsControl.ItemTemplate>
@@ -124,6 +140,7 @@
                   <StackPanel Spacing="3">
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding RouteSummary}" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ActivitySummary}" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
                   </StackPanel>
                   <TextBlock Grid.Column="1" Text="{Binding State}" Opacity="0.65" VerticalAlignment="Center"/>
                   <Button Grid.Column="2" Content="Edit" Command="{Binding EditCommand}" VerticalAlignment="Center"/>

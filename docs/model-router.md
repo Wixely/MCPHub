@@ -9,9 +9,29 @@ The Router connects multiple agents to model APIs through one stable local addre
 3. Click **Add output**, select it under **Global default**, and **Apply default**.
 4. Choose **Add agent**, enter an agent name, select **Use global default** or a specific output, and **Add agent and generate key**. Copy the generated key before dismissing it. Only its hash is retained; edit the agent and use **Rotate this agent's key** if the original is lost.
 5. Configure that agent's OpenAI-compatible API base URL as `http://127.0.0.1:5801/v1` and its API key as the generated input key. Keep its ordinary model setting if the output has no model override.
-6. Click **Start router**. Enable **Start when MCPHub launches** and **Save listener** if wanted.
+6. Click **Start router**. Enable **Start when MCPHub launches** and **Apply listener** if wanted.
 
-The desktop Router binds only to IPv4 loopback and stops with the desktop application. Change its port while stopped if the default conflicts with another application. For server/container use, the [headless Router sample](../samples/HeadlessRouter/README.md) supplies a separate entry point, configurable binding, portable read-only configuration and secret-file support without Avalonia.
+The Router stops with the desktop application. For server/container use, the [headless Router sample](../samples/HeadlessRouter/README.md) supplies a separate entry point, portable read-only configuration and secret-file support without Avalonia.
+
+## Listener address and port
+
+**Bind address** takes any IP address of this machine. `127.0.0.1` (the default) accepts connections from this machine only. `0.0.0.0` accepts them on every IPv4 interface, so agents elsewhere on the network can reach the Router — keep agent keys private when doing so, since the endpoint is then exposed to anything that can route to the machine. A specific interface address binds that network alone. Host names are rejected: which of several resolved addresses got bound would not be visible.
+
+**Apply listener** saves the address, port and launch setting, and rebinds a running Router to them immediately. MCPHub is not restarted and no route, key or output is disturbed. A listening socket cannot be moved in place, so the endpoint is stopped and started: requests in flight on the old address end, and agents reconnect on the new one. If the new address or port cannot be bound — a port already taken, or an address this machine does not own — the previous settings are restored and the listener comes back up on them, and the page says what failed.
+
+The endpoint shown on the page is always one an agent on this machine can dial: with a wildcard bind there is no literal to connect to, so loopback is displayed. Agents on other machines use this machine's own address with the same port.
+
+## Testing an output
+
+**Test** on an output row, and **Test all** above the list, ask the provider for its model list (`GET {base URL}models`) using that output's stored upstream key. It generates no tokens, so testing costs nothing, and it works whether or not the Router is started — a failure here is a configuration problem, not a routing one.
+
+A pass reports the round trip and how many models the provider offers. When the output sets **Model sent to provider**, the test also checks that name is in the list and fails naming what is available instead — the single most common reason an otherwise-correct output returns errors only once an agent uses it. Failures name what to change: a rejected key, a base URL missing or duplicating its `/v1` prefix, nothing listening on the host and port, an unresolvable host, or a redirect (which the Router does not follow, so its target must be configured directly). A provider that does not list models but answers is reported as reachable with that caveat rather than as a failure.
+
+## Agent activity
+
+Each agent row shows when that agent last reached the Router and how many requests it has made, so an agent that has silently stopped calling — or has never connected at all — is visible without reading any logs. A key that does not resolve to an enabled agent is counted separately and surfaced above the list, which is what a stale key on some agent looks like.
+
+Only a timestamp and a count are kept, per agent, in `router-activity.json` beside `router.json`. No prompt, completion, model name, URL or client address is recorded. The stamp is taken when a key authenticates, so it answers "did this agent reach the hub at all", independently of whether its provider then succeeded. Removing an agent discards its history. Losing the file loses only the counts.
 
 ## Routing rules
 
@@ -50,6 +70,8 @@ Protocol references: [OpenAI Chat API](https://developers.openai.com/api/referen
 ## Persistence and credentials
 
 Configuration lives in `router.json` beside MCPHub's `settings.json`. Saves replace the file atomically; failed saves leave the previous in-memory configuration active. Invalid configuration disables Router configuration changes until the file is repaired and MCPHub restarted, without stopping the rest of the app.
+
+Routes travel between machines through **Settings → Back up and move settings**, which exports the Router category — listener settings, outputs and agents, with existing agent key hashes so those agents keep working. Upstream provider keys are excluded from an unencrypted archive and are re-wrapped for the destination machine only when the archive is exported with a password and the **Tokens and keys** category.
 
 Input keys contain 256 bits of random data and only SHA-256 hashes are stored. Output bearer keys are encrypted with current-user Windows DPAPI. On Linux, they use the same protection level as MCPHub's existing secret store: base64 encoding in an owner-only file, **not encryption**. Windows credentials cannot be transferred to another user or OS; re-enter them after migration. Keep this configuration out of source control.
 

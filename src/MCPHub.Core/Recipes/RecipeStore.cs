@@ -39,6 +39,14 @@ public interface IRecipeStore
 
     /// <summary>Removes a recipe; false when no recipe has that id.</summary>
     bool Remove(string id);
+
+    /// <summary>
+    /// Merges recipes from a settings archive, keyed on id: an incoming recipe replaces the one with its id
+    /// and is otherwise added. Local recipes the archive does not mention are kept, so importing a colleague's
+    /// knowledge base never silently discards your own. Entries that fail validation are skipped.
+    /// </summary>
+    /// <returns>How many recipes were added and how many replaced an existing one.</returns>
+    (int Added, int Replaced) Import(IEnumerable<Recipe> recipes);
 }
 
 /// <inheritdoc />
@@ -170,6 +178,58 @@ public sealed class RecipeStore : IRecipeStore
 
         Changed?.Invoke();
         return true;
+    }
+
+    /// <inheritdoc />
+    public (int Added, int Replaced) Import(IEnumerable<Recipe> recipes)
+    {
+        ArgumentNullException.ThrowIfNull(recipes);
+        var added = 0;
+        var replaced = 0;
+
+        lock (_gate)
+        {
+            foreach (var incoming in recipes)
+            {
+                if (incoming is null || string.IsNullOrWhiteSpace(incoming.Id))
+                    continue;
+
+                RecipeValidator.Validated validated;
+                try { validated = RecipeValidator.Validate(RecipeDraft.From(incoming)); }
+                catch (RecipeValidationException ex)
+                {
+                    _logger.LogWarning("Skipped imported recipe '{Title}': {Reason}", incoming.Title, ex.Message);
+                    continue;
+                }
+
+                var stored = FindUnlocked(incoming.Id);
+                if (stored is null)
+                {
+                    stored = new Recipe { Id = incoming.Id.Trim(), CreatedAt = incoming.CreatedAt };
+                    _recipes.Add(stored);
+                    added++;
+                }
+                else
+                {
+                    replaced++;
+                }
+
+                stored.Title = validated.Title;
+                stored.When = validated.When;
+                stored.Then = validated.Then;
+                stored.Services = [.. validated.Services];
+                stored.Notes = validated.Notes;
+                stored.Source = NormalizeSource(incoming.Source);
+                stored.UpdatedAt = incoming.UpdatedAt == default ? DateTimeOffset.UtcNow : incoming.UpdatedAt;
+            }
+
+            if (added + replaced > 0)
+                SaveUnlocked();
+        }
+
+        if (added + replaced > 0)
+            Changed?.Invoke();
+        return (added, replaced);
     }
 
     private Recipe? FindUnlocked(string id)

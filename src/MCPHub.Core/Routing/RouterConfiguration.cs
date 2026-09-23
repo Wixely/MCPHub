@@ -4,6 +4,14 @@ public sealed record RouterConfiguration
 {
     public int SchemaVersion { get; init; } = 1;
     public int Port { get; init; } = 5801;
+
+    /// <summary>
+    /// Address the listener binds to. <c>127.0.0.1</c> (the default) keeps the Router on this machine;
+    /// <c>0.0.0.0</c> accepts connections on every IPv4 interface, and <c>::</c> on every IPv6 one. Any
+    /// literal address of a local interface also works, to bind one network only.
+    /// </summary>
+    public string BindAddress { get; init; } = RouterConfigurationRules.Loopback;
+
     public bool StartOnLaunch { get; init; }
     public string? DefaultOutputId { get; init; }
     public RouterInput[] Inputs { get; init; } = [];
