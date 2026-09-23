@@ -72,17 +72,23 @@ public static class InstanceRestart
     /// <em>before</em> shutting down: once the outgoing process is gone there is nobody left to start one.
     /// </summary>
     /// <param name="executablePath">
-    /// The program to run; defaults to this process's own executable. Under <c>dotnet run</c> that is the
-    /// host rather than MCPHub, which is why restart is a shipped-build affordance.
+    /// The program to run; defaults to this process's own executable.
+    /// </param>
+    /// <param name="entryAssemblyName">
+    /// The name the executable is expected to have; defaults to the entry assembly's. See
+    /// <see cref="IsLaunchedByAHost"/> for what this is guarding against.
     /// </param>
     /// <returns><see langword="null"/> on success, or a message explaining why nothing was started.</returns>
-    public static string? TryLaunchReplacement(string? executablePath = null)
+    public static string? TryLaunchReplacement(string? executablePath = null, string? entryAssemblyName = null)
     {
         var path = executablePath ?? Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(path))
             return "MCPHub could not work out its own executable path, so it cannot restart itself. Close it and start it again.";
         if (!File.Exists(path))
             return $"MCPHub could not find its executable at {path}, so it cannot restart itself. Close it and start it again.";
+        if (IsLaunchedByAHost(path, entryAssemblyName))
+            return $"MCPHub is running under {Path.GetFileName(path)} rather than from its own executable, so restarting it " +
+                   "would start the host instead of MCPHub. Stop and start it the way you launched it.";
 
         try
         {
@@ -101,5 +107,22 @@ public static class InstanceRestart
         {
             return "MCPHub could not start a replacement process: " + ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Whether this process was started through a host launcher rather than from MCPHub's own apphost — the
+    /// <c>dotnet run</c> / <c>dotnet MCPHub.dll</c> case, where <see cref="Environment.ProcessPath"/> is
+    /// <c>dotnet</c>. Re-launching that path with MCPHub's arguments would start the host, fail, and leave
+    /// the user with nothing once the outgoing process had shut down. Refusing is the only safe answer, and
+    /// it has to be detected rather than documented: getting it wrong destroys the running app.
+    /// </summary>
+    public static bool IsLaunchedByAHost(string? executablePath = null, string? entryAssemblyName = null)
+    {
+        var path = executablePath ?? Environment.ProcessPath;
+        var expected = entryAssemblyName ?? System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(expected))
+            return false; // Nothing to compare against: attempt the launch rather than block on a guess.
+
+        return !string.Equals(Path.GetFileNameWithoutExtension(path), expected, StringComparison.OrdinalIgnoreCase);
     }
 }

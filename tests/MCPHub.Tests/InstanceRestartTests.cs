@@ -79,6 +79,39 @@ public sealed class InstanceRestartTests
         Assert.Contains("could not find its executable", InstanceRestart.TryLaunchReplacement(missing));
     }
 
+    [Fact]
+    public void Running_under_dotnet_is_recognised_so_restart_refuses_instead_of_closing_for_good()
+    {
+        // dotnet run / dotnet MCPHub.dll: Environment.ProcessPath is the host, and re-launching it with
+        // MCPHub's arguments would start dotnet, fail, and leave nothing behind once MCPHub had shut down.
+        Assert.True(InstanceRestart.IsLaunchedByAHost(@"C:\Program Files\dotnet\dotnet.exe", "MCPHub"));
+        Assert.True(InstanceRestart.IsLaunchedByAHost("/usr/bin/dotnet", "MCPHub"));
+
+        // A published build runs from its own apphost, whatever the extension or casing.
+        Assert.False(InstanceRestart.IsLaunchedByAHost(@"C:\sbin\MCPHub\MCPHub.exe", "MCPHub"));
+        Assert.False(InstanceRestart.IsLaunchedByAHost("/opt/mcphub/mcphub", "MCPHub"));
+    }
+
+    [Fact]
+    public void An_unknown_executable_or_assembly_name_does_not_block_a_restart_on_a_guess()
+    {
+        Assert.False(InstanceRestart.IsLaunchedByAHost("", "MCPHub"));
+        Assert.False(InstanceRestart.IsLaunchedByAHost(@"C:\somewhere\MCPHub.exe", ""));
+    }
+
+    [Fact]
+    public void A_host_launch_is_refused_with_a_message_naming_the_host()
+    {
+        // The real executable exists, so this reaches the host check rather than the missing-file one.
+        var host = Environment.ProcessPath!;
+
+        var failure = InstanceRestart.TryLaunchReplacement(host, entryAssemblyName: "SomethingElse");
+
+        Assert.NotNull(failure);
+        Assert.Contains(Path.GetFileName(host), failure);
+        Assert.Contains("would start the host instead of MCPHub", failure);
+    }
+
     /// <summary>
     /// A child that stays alive long enough to be waited on. <c>ping</c> rather than <c>timeout</c> on
     /// Windows: <c>timeout</c> exits at once when stdin is not a console, which it is not under a test run.
