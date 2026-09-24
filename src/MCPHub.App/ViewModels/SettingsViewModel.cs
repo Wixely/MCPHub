@@ -50,6 +50,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IAgentManagementPolicy _management;
     private readonly ISettingsArchiveService _archive;
     private readonly ProxyCoordinator _proxy;
+    private readonly IStartupRegistration _startup;
     private bool _initialising;
 
     // Agent management switches. Unlike the rest of the page these persist as soon as they are toggled (no
@@ -70,6 +71,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _githubPatInput = string.Empty;
     [ObservableProperty] private bool _hasStoredPat;
     [ObservableProperty] private string? _statusMessage;
+
+    /// <summary>
+    /// Whether MCPHub runs when the user signs in. Backed by the OS rather than by settings.json, and
+    /// applied the moment it is toggled — there is nothing for Save to do with it.
+    /// </summary>
+    [ObservableProperty] private bool _runAtSignIn;
 
     // Import / export.
     [ObservableProperty] private string _archivePassword = string.Empty;
@@ -104,7 +111,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         IAppPaths paths,
         IAgentManagementPolicy management,
         ISettingsArchiveService archive,
-        ProxyCoordinator proxy)
+        ProxyCoordinator proxy,
+        IStartupRegistration startup)
     {
         _settingsStore = settingsStore;
         _secretStore = secretStore;
@@ -113,10 +121,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _management = management;
         _archive = archive;
         _proxy = proxy;
+        _startup = startup;
 
         _initialising = true;
         try
         {
+            // Read from the OS, not from settings: the user may have turned it off outside MCPHub.
+            RunAtSignIn = startup.IsEnabled;
             // Show the effective values (environment override included), not just what settings.json says.
             AgentManagementEnabled = management.ManagementEnabled;
             AgentControlEnabled = management.ControlSwitch;
@@ -145,6 +156,42 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     /// <summary>Set the servers folder from the folder picker (called by the view).</summary>
     public void SetFolder(string path) => SharedServersFolder = path;
+
+    // ---- run at sign-in -------------------------------------------------------------------------
+
+    /// <summary>False when this installation cannot register itself; the checkbox is then shown locked.</summary>
+    public bool CanConfigureStartup => _startup.IsSupported;
+
+    /// <summary>What will happen at sign-in, or why the setting is unavailable here.</summary>
+    public string StartupSummary => _startup.UnavailableReason
+        ?? (RunAtSignIn
+            ? "MCPHub will start when you sign in. It starts the same way as a normal launch, so anything set to start with MCPHub starts too."
+            : "MCPHub will not start when you sign in.");
+
+    partial void OnRunAtSignInChanged(bool value)
+    {
+        if (_initialising)
+        {
+            OnPropertyChanged(nameof(StartupSummary));
+            return;
+        }
+
+        if (_startup.TrySetEnabled(value) is { } failure)
+        {
+            StatusMessage = failure;
+            // Put the box back where the OS actually is, rather than leaving it showing a change that
+            // did not happen. Guarded so this correction does not re-enter as another toggle.
+            _initialising = true;
+            try { RunAtSignIn = _startup.IsEnabled; }
+            finally { _initialising = false; }
+        }
+        else
+        {
+            StatusMessage = value ? "MCPHub will now start when you sign in." : "MCPHub will no longer start when you sign in.";
+        }
+
+        OnPropertyChanged(nameof(StartupSummary));
+    }
 
     /// <summary>The folder actually in use: the configured one, or the default when none is set.</summary>
     private string EffectiveServersFolder(string? configured) =>

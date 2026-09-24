@@ -60,6 +60,16 @@
       </StackPanel>
 
       <StackPanel Spacing="6">
+        <TextBlock Text="Startup" FontWeight="SemiBold"/>
+        <TextBlock Text="Applies immediately (no Save needed), and is stored with your user account rather than in settings.json — so it is not carried by an exported settings archive, and turning it off in Task Manager's Startup tab is reflected here."
+                   Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+        <CheckBox IsChecked="{Binding RunAtSignIn}" IsEnabled="{Binding CanConfigureStartup}"
+                  Content="Run MCPHub when I sign in"
+                  ToolTip.Tip="Registers MCPHub for this user account only — no administrator rights needed, and no other account is affected."/>
+        <TextBlock Text="{Binding StartupSummary}" Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
         <TextBlock Text="System tray (Windows)" FontWeight="SemiBold"/>
         <CheckBox IsChecked="{Binding MinimizeToTray}" Content="Minimizing the window hides it to the tray"/>
         <CheckBox IsChecked="{Binding CloseToTray}" Content="Closing the window hides to the tray instead of exiting"/>

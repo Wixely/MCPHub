@@ -37,6 +37,9 @@ public static class Composition
 
         // Settings + secrets
         services.AddSingleton<IAppPaths, AppPaths>();
+        // Run-at-sign-in lives in the OS (HKCU Run / XDG autostart), not settings.json, so the checkbox
+        // always reflects what the machine will actually do.
+        services.AddSingleton<IStartupRegistration>(_ => new StartupRegistration());
         services.AddSingleton<ISettingsStore, SettingsStore>();
         services.AddSingleton<ISecretStore, SecretStore>();
         services.AddSingleton<RouterStore>();
