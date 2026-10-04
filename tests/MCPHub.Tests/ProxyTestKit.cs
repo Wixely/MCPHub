@@ -18,7 +18,7 @@ internal static class ProxyTestKit
     {
         public AggregatedCatalog Catalog { get; set; } = AggregatedCatalog.Empty;
 
-        public IReadOnlyCollection<UpstreamServer> Upstreams => [];
+        public IReadOnlyCollection<UpstreamServer> Upstreams { get; set; } = [];
 
         public event Action? CatalogChanged { add { } remove { } }
 

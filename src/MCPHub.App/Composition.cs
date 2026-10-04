@@ -113,6 +113,11 @@ public static class Composition
 
         // MCP proxy / aggregator
         services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
+
+        // What tools exist, for the Permissions page's picker. A snapshot each time it is asked, since
+        // services connect and disconnect and a cached list would offer tools that are no longer there.
+        services.AddSingleton<IToolCatalog>(sp => new ToolCatalog(
+            sp.GetRequiredService<IUpstreamRegistry>(), sp.GetServices<ILocalToolProvider>()));
         // Explicit factory: registering ProxyHandlers by type makes the container fall back to the
         // registry-only constructor (the policy overload has a non-defaulted parameter it cannot
         // resolve), which would silently drop the in-process tool providers.

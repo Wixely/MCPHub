@@ -64,14 +64,76 @@
                     BorderThickness="1" CornerRadius="6" Padding="10">
               <TextBlock Text="{Binding SelectedUserWarning}" TextWrapping="Wrap"/>
             </Border>
-            <TextBlock Text="Tools this user may use, one per line"/>
-            <TextBox Text="{Binding Grants}" AcceptsReturn="True" MinHeight="100"
-                     FontFamily="Cascadia Mono,Consolas,monospace"
-                     Watermark="kodi__play_pause&#x0a;redis__*&#x0a;*"/>
-            <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                       Text="A tool name, one whole server (redis__*), or everything (*). Everything includes servers not installed yet and the tools that manage this hub, so give it only to a user you trust to run the place."/>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <ToggleSwitch IsChecked="{Binding IsAdvanced}" OffContent="Services" OnContent="Every tool"/>
+              <TextBlock Grid.Column="1" Text="{Binding ModeText}" VerticalAlignment="Center" Opacity="0.65" FontSize="12"/>
+            </Grid>
+
+            <CheckBox IsChecked="{Binding GrantEverything}" Content="Everything, including services added later"/>
+
+            <!-- Simple: one checkbox per service. -->
+            <ItemsControl IsVisible="{Binding !IsAdvanced}" ItemsSource="{Binding Groups}" IsEnabled="{Binding !GrantEverything}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ToolGroupRow">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,2">
+                    <CheckBox IsChecked="{Binding IsGranted}" Content="{Binding DisplayName}"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Summary}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Advanced: every tool, with a filter, multi-select and space to toggle. -->
+            <StackPanel IsVisible="{Binding IsAdvanced}" Spacing="8" IsEnabled="{Binding !GrantEverything}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding ToolFilter}" Watermark="Filter by tool or service"/>
+                <Button Grid.Column="1" Content="Select all" Command="{Binding SelectAllToolsCommand}"/>
+                <Button Grid.Column="2" Content="Select none" Command="{Binding SelectNoToolsCommand}"/>
+              </Grid>
+              <ListBox x:Name="ToolList" ItemsSource="{Binding VisibleTools}" SelectionMode="Multiple"
+                       MaxHeight="320" KeyDown="OnToolListKeyDown">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ToolRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                      <CheckBox IsChecked="{Binding IsGranted}"/>
+                      <TextBlock Grid.Column="1" Text="{Binding ShortName}" VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="2" Text="{Binding GroupName}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock IsVisible="{Binding !HasTools}" Opacity="0.7" TextWrapping="Wrap"
+                         Text="No tools to show. Services offer their tools once they are connected."/>
+              <TextBlock FontSize="12" Opacity="0.65" TextWrapping="Wrap"
+                         Text="Select rows and press Space to tick them. Ticking every tool of a service grants the service, so tools it adds later are included."/>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding HasKeptGrants}" Spacing="4">
+              <TextBlock Text="Also granted" FontWeight="SemiBold" FontSize="12"/>
+              <ItemsControl ItemsSource="{Binding KeptGrants}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                      <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" VerticalAlignment="Center"/>
+                      <Button Grid.Column="1" Content="Remove" FontSize="11"
+                              Command="{Binding $parent[ItemsControl].((vm:PermissionsViewModel)DataContext).RemoveGrantCommand}"
+                              CommandParameter="{Binding}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock FontSize="12" Opacity="0.65" TextWrapping="Wrap"
+                         Text="Named by hand, for services that are not connected or not installed yet. Kept as typed."/>
+            </StackPanel>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox Text="{Binding NewGrant}" Watermark="Add by name, e.g. kodi__* or kodi__play_pause"
+                       FontFamily="Cascadia Mono,Consolas,monospace"/>
+              <Button Grid.Column="1" Content="Add" Command="{Binding AddGrantCommand}"/>
+            </Grid>
+
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Save grants" Command="{Binding SaveCommand}"/>
+              <Button Content="Save" Command="{Binding SaveCommand}"/>
               <Button Content="Revoke all" Command="{Binding RevokeAllCommand}"/>
             </StackPanel>
           </StackPanel>

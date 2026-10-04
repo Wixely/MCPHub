@@ -29,6 +29,29 @@ public sealed class PermissionsViewModelTests : IDisposable
 
     private sealed record Fixture(PermissionsViewModel Vm, UserStore Users, PermissionsStore Store);
 
+    /// <summary>
+    /// Two services and one of the hub's own groups. The picker shows what exists, so a test about
+    /// picking tools has to say what exists.
+    /// </summary>
+    private static IToolCatalog Catalog() => new StubCatalog(
+    [
+        new ToolGroup("kodi", "Kodi", ToolGroupKind.Service, true, ["kodi__play_pause", "kodi__stop"]),
+        new ToolGroup("redis", "Redis", ToolGroupKind.Service, true, ["redis__get", "redis__set"]),
+        new ToolGroup("offline", "Offline service", ToolGroupKind.Service, false, []),
+        new ToolGroup("recipes", "Recipes", ToolGroupKind.Hub, true, ["recipes__list"]),
+    ]);
+
+    private sealed class StubCatalog(IReadOnlyList<ToolGroup> groups) : IToolCatalog
+    {
+        public IReadOnlyList<ToolGroup> Groups => groups;
+    }
+
+    private static ToolGroupRow Group(PermissionsViewModel vm, string key) =>
+        vm.Groups.Single(g => g.Key == key);
+
+    private static ToolRow Tool(PermissionsViewModel vm, string name) =>
+        vm.Groups.SelectMany(g => g.Tools).Single(t => t.Name == name);
+
     private Fixture Build(params (string Variable, string Value)[] environment)
     {
         var map = environment.ToDictionary(e => e.Variable, e => e.Value, StringComparer.Ordinal);
@@ -43,7 +66,7 @@ public sealed class PermissionsViewModelTests : IDisposable
             new AdministrationPolicy(settings, Read),
             new AgentManagementPolicy(settings, Read));
 
-        return new Fixture(new PermissionsViewModel(users, store, authorization), users, store);
+        return new Fixture(new PermissionsViewModel(users, store, authorization, Catalog()), users, store);
     }
 
     // ---- the list ------------------------------------------------------------------------------
@@ -103,8 +126,12 @@ public sealed class PermissionsViewModelTests : IDisposable
 
     // ---- editing grants ------------------------------------------------------------------------
 
+    /// <summary>
+    /// What a user holds arrives as ticks, whichever form it was written in: a whole service ticks the
+    /// service and everything under it, one tool ticks just that tool.
+    /// </summary>
     [Fact]
-    public void Selecting_a_user_loads_its_grants_one_per_line()
+    public void Selecting_a_user_ticks_what_it_already_holds()
     {
         var f = Build();
         var issued = f.Users.Create("agent");
@@ -115,7 +142,98 @@ public sealed class PermissionsViewModelTests : IDisposable
 
         Assert.True(reloaded.Vm.HasUserSelected);
         Assert.Contains("Tools for agent", reloaded.Vm.EditorTitle, StringComparison.Ordinal);
-        Assert.Equal($"kodi__*{Environment.NewLine}redis__get", reloaded.Vm.Grants);
+
+        Assert.True(Group(reloaded.Vm, "kodi").IsGranted);
+        Assert.All(Group(reloaded.Vm, "kodi").Tools, t => Assert.True(t.IsGranted));
+
+        Assert.False(Group(reloaded.Vm, "redis").IsGranted);
+        Assert.True(Tool(reloaded.Vm, "redis__get").IsGranted);
+        Assert.False(Tool(reloaded.Vm, "redis__set").IsGranted);
+
+        Assert.False(reloaded.Vm.GrantEverything);
+        Assert.Empty(reloaded.Vm.KeptGrants);
+    }
+
+    /// <summary>Ticking a service grants the service, not the tools it happens to have today — so a
+    /// tool it adds later is covered without anybody revisiting this page.</summary>
+    [Fact]
+    public void Ticking_a_service_saves_it_as_the_whole_service()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        Group(vm, "kodi").IsGranted = true;
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["kodi__*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    /// <summary>
+    /// And ticking every tool of a service means the same thing, so switching between the two lists
+    /// cannot quietly change what a user is allowed.
+    /// </summary>
+    [Fact]
+    public void Ticking_every_tool_of_a_service_saves_the_service()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        Tool(vm, "kodi__play_pause").IsGranted = true;
+        Tool(vm, "kodi__stop").IsGranted = true;
+
+        Assert.True(Group(vm, "kodi").IsGranted);
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["kodi__*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    [Fact]
+    public void Unticking_one_tool_drops_the_service_to_the_tools_that_are_left()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        f.Store.SetGrants(issued.User.Id, ["kodi__*"]);
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        Tool(vm, "kodi__stop").IsGranted = false;
+
+        Assert.False(Group(vm, "kodi").IsGranted);
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["kodi__play_pause"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    /// <summary>
+    /// Everything is its own grant, because it covers services that are not installed yet and no list
+    /// of checkboxes can offer those. Ticking it ticks the lot; untying anything takes it back off.
+    /// </summary>
+    [Fact]
+    public void Everything_is_saved_as_everything_and_comes_off_when_anything_is_unticked()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.GrantEverything = true;
+        Assert.All(vm.Groups, g => Assert.True(g.IsGranted));
+        vm.SaveCommand.Execute(null);
+        Assert.Equal(["*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+
+        Tool(vm, "kodi__stop").IsGranted = false;
+
+        Assert.False(vm.GrantEverything);
+        vm.SaveCommand.Execute(null);
+        Assert.DoesNotContain("*", r.Store.GrantsFor(issued.User.Id)!.Tools);
     }
 
     /// <summary>
@@ -123,19 +241,23 @@ public sealed class PermissionsViewModelTests : IDisposable
     /// and losing the selection after each one is the kind of thing that makes a page tiring to use.
     /// </summary>
     [Fact]
-    public void Saving_grants_keeps_the_user_selected()
+    public void Saving_keeps_the_user_selected_and_the_ticks_where_they_were()
     {
         var f = Build();
         var issued = f.Users.Create("agent");
-        var reloaded = Build();
-        reloaded.Vm.SelectedUser = reloaded.Vm.Rows.Single();
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
 
-        reloaded.Vm.Grants = "kodi__*\nredis__get";
-        reloaded.Vm.SaveCommand.Execute(null);
+        Group(vm, "kodi").IsGranted = true;
+        Tool(vm, "redis__get").IsGranted = true;
+        vm.SaveCommand.Execute(null);
 
-        Assert.Equal(["kodi__*", "redis__get"], reloaded.Store.GrantsFor(issued.User.Id)!.Tools);
-        Assert.NotNull(reloaded.Vm.SelectedUser);
-        Assert.Equal(["kodi__*", "redis__get"], reloaded.Vm.SelectedUser!.Tools);
+        Assert.Equal(["kodi__*", "redis__get"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+        Assert.NotNull(vm.SelectedUser);
+        Assert.Equal(["kodi__*", "redis__get"], vm.SelectedUser!.Tools);
+        Assert.True(Group(vm, "kodi").IsGranted);
+        Assert.True(Tool(vm, "redis__get").IsGranted);
     }
 
     [Fact]
@@ -153,19 +275,187 @@ public sealed class PermissionsViewModelTests : IDisposable
         Assert.NotEmpty(reloaded.Vm.StatusMessage);
     }
 
+    /// <summary>
+    /// The picker cannot produce a grant that matches nothing, but the box for naming one by hand can,
+    /// and the rules still refuse it rather than storing something that looks granted and is not.
+    /// </summary>
     [Fact]
-    public void A_grant_that_could_never_match_is_reported_rather_than_saved()
+    public void A_hand_written_grant_that_could_never_match_is_reported_rather_than_saved()
     {
         var f = Build();
         f.Users.Create("agent");
-        var reloaded = Build();
-        reloaded.Vm.SelectedUser = reloaded.Vm.Rows.Single();
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
 
-        reloaded.Vm.Grants = "two words";
-        reloaded.Vm.SaveCommand.Execute(null);
+        vm.NewGrant = "two words";
+        vm.AddGrantCommand.Execute(null);
+        vm.SaveCommand.Execute(null);
 
-        Assert.Empty(reloaded.Store.Snapshot.Grants);
-        Assert.NotEmpty(reloaded.Vm.StatusMessage);
+        Assert.Empty(r.Store.Snapshot.Grants);
+        Assert.NotEmpty(vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// A grant naming something the hub cannot currently see — a service that is not connected, or one
+    /// not installed yet — survives a save. A picker that can only show what exists must not delete
+    /// what it cannot show.
+    /// </summary>
+    [Fact]
+    public void Grants_the_picker_cannot_show_are_kept_through_a_save()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        f.Store.SetGrants(issued.User.Id, ["notinstalled__*", "kodi__stop"]);
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        Assert.Equal(["notinstalled__*"], vm.KeptGrants);
+        Assert.True(vm.HasKeptGrants);
+        Assert.True(Tool(vm, "kodi__stop").IsGranted);
+
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["kodi__stop", "notinstalled__*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    [Fact]
+    public void A_hand_written_grant_the_picker_knows_is_ticked_rather_than_listed_twice()
+    {
+        var f = Build();
+        f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.NewGrant = "kodi__*";
+        vm.AddGrantCommand.Execute(null);
+
+        Assert.True(Group(vm, "kodi").IsGranted);
+        Assert.Empty(vm.KeptGrants);
+        Assert.Empty(vm.NewGrant);
+    }
+
+    [Fact]
+    public void A_kept_grant_can_be_removed()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        f.Store.SetGrants(issued.User.Id, ["notinstalled__*"]);
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.RemoveGrantCommand.Execute("notinstalled__*");
+        vm.SaveCommand.Execute(null);
+
+        Assert.Empty(r.Store.GrantsFor(issued.User.Id)!.Tools);
+        Assert.False(vm.HasKeptGrants);
+    }
+
+    // ---- working a long list -------------------------------------------------------------------
+
+    /// <summary>
+    /// Space is what the full list is worked with: select a run of rows, press it once. Mixed
+    /// selections all go the same way, so one press has one outcome rather than inverting each row.
+    /// </summary>
+    [Fact]
+    public void Space_ticks_a_whole_selection_and_a_second_press_unticks_it()
+    {
+        var f = Build();
+        f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+        var chosen = new[] { Tool(vm, "kodi__stop"), Tool(vm, "redis__get") };
+        chosen[0].IsGranted = true;
+
+        vm.ToggleTools(chosen);
+
+        Assert.All(chosen, t => Assert.True(t.IsGranted));
+
+        vm.ToggleTools(chosen);
+
+        Assert.All(chosen, t => Assert.False(t.IsGranted));
+    }
+
+    [Fact]
+    public void Select_all_and_select_none_cover_every_tool_on_show()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.SelectAllToolsCommand.Execute(null);
+        vm.SaveCommand.Execute(null);
+
+        // Every service ends up whole, since every one of its tools is ticked.
+        Assert.Equal(["kodi__*", "recipes__*", "redis__*"], r.Store.GrantsFor(issued.User.Id)!.Tools.Order());
+
+        vm.SelectNoToolsCommand.Execute(null);
+        vm.SaveCommand.Execute(null);
+
+        Assert.Empty(r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    /// <summary>
+    /// With a filter on, "select all" means the matches. Anything else makes a search box dangerous:
+    /// you would be granting what you cannot see.
+    /// </summary>
+    [Fact]
+    public void Select_all_inside_a_filter_only_touches_what_is_showing()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.ToolFilter = "redis";
+        Assert.Equal(["redis__get", "redis__set"], vm.VisibleTools.Select(t => t.Name));
+
+        vm.SelectAllToolsCommand.Execute(null);
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["redis__*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
+    }
+
+    [Fact]
+    public void The_filter_matches_a_service_name_as_well_as_a_tool_name()
+    {
+        var f = Build();
+        f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        vm.ToolFilter = "Kodi";
+
+        Assert.Equal(["kodi__play_pause", "kodi__stop"], vm.VisibleTools.Select(t => t.Name));
+    }
+
+    /// <summary>A service that is not connected has no tools to tick, so the whole-service checkbox is
+    /// the only way to grant it — and it still works.</summary>
+    [Fact]
+    public void A_service_with_no_connection_can_still_be_granted_whole()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        var r = Build();
+        var vm = r.Vm;
+        vm.SelectedUser = vm.Rows.Single();
+
+        var offline = Group(vm, "offline");
+        Assert.False(offline.IsAvailable);
+        Assert.Empty(offline.Tools);
+
+        offline.IsGranted = true;
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["offline__*"], r.Store.GrantsFor(issued.User.Id)!.Tools);
     }
 
     /// <summary>

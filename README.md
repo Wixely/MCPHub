@@ -175,7 +175,11 @@ A warning appears when users exist while a key is not required: nothing they hav
 
 Which tools each user may use. Users themselves are on the **Users** page, and a user starts with no tools at all — issuing a key is not the same as handing over the hub.
 
-Give a tool name (`kodi__play_pause`), one whole server (`kodi__*`), or everything (`*`). Everything includes servers that are not installed yet, which is what makes installing possible, and the tools that manage this hub, so give it only to a user you trust to run the place.
+Pick tools with checkboxes. **Services** lists one box per MCP service and the hub's own groups — ticking one grants that service whole, including tools it adds later. **Every tool** lists them all with a filter, so a run of rows can be selected and ticked with Space, and **Select all** / **Select none** work on whatever the filter is showing. Ticking every tool of a service is the same as ticking the service, so switching between the two lists never changes what a user is allowed.
+
+**Everything** is a checkbox of its own, because it covers services that are not installed yet — which is what makes installing possible — and the tools that manage this hub. Give it only to a user you trust to run the place.
+
+A grant naming something the hub cannot currently see — a tool of a service that is not connected, or one not installed yet — is listed under **Also granted** and kept exactly as written; the box beneath adds one by hand. A picker that can only show what exists must not delete what it cannot show.
 
 Every user is listed whether or not it has been given anything, since a user with a key and nothing else is exactly the case worth seeing. A suspended user is flagged here too — what it has been given applies to nothing until it is enabled.
 

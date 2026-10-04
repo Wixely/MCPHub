@@ -75,21 +75,52 @@ public sealed partial class PermissionsViewModel : ViewModelBase
     private readonly UserStore _users;
     private readonly PermissionsStore _permissions;
     private readonly CompositeToolAuthorization _authorization;
+    private readonly IToolCatalog _catalog;
+
+    /// <summary>True while the picker is being loaded or cascaded, so a checkbox changing another does
+    /// not read back as somebody clicking it.</summary>
+    private bool _syncing;
 
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private GrantRow? _selectedUser;
-    [ObservableProperty] private string _grants = string.Empty;
+    [ObservableProperty] private string _newGrant = string.Empty;
     [ObservableProperty] private string _explainTool = string.Empty;
     [ObservableProperty] private string _explainSummary = string.Empty;
+    [ObservableProperty] private bool _isAdvanced;
+    [ObservableProperty] private bool _grantEverything;
+    [ObservableProperty] private string _toolFilter = string.Empty;
 
     public PermissionsViewModel(
-        UserStore users, PermissionsStore permissions, CompositeToolAuthorization authorization)
+        UserStore users,
+        PermissionsStore permissions,
+        CompositeToolAuthorization authorization,
+        IToolCatalog catalog)
     {
         _users = users;
         _permissions = permissions;
         _authorization = authorization;
+        _catalog = catalog;
         Refresh();
     }
+
+    /// <summary>Servers, each a single checkbox meaning "every tool it has, now and later".</summary>
+    public ObservableCollection<ToolGroupRow> Groups { get; } = [];
+
+    /// <summary>Every tool there is, filtered by <see cref="ToolFilter"/>, for picking them one by one.</summary>
+    public ObservableCollection<ToolRow> VisibleTools { get; } = [];
+
+    /// <summary>
+    /// Grants that name something this hub cannot currently see — a tool of a service that is not
+    /// connected, or a server not installed yet. Carried through a save untouched: a picker that can
+    /// only show what exists must not delete what it cannot show.
+    /// </summary>
+    public ObservableCollection<string> KeptGrants { get; } = [];
+
+    public bool HasKeptGrants => KeptGrants.Count > 0;
+
+    public bool HasTools => VisibleTools.Count > 0;
+
+    public string ModeText => IsAdvanced ? "Choosing tools one by one" : "Choosing whole services";
 
     public ObservableCollection<GrantRow> Rows { get; } = [];
 
@@ -130,7 +161,183 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         OnPropertyChanged(nameof(EditorTitle));
         OnPropertyChanged(nameof(SelectedUserWarning));
         OnPropertyChanged(nameof(HasSelectedUserWarning));
-        Grants = value is null ? string.Empty : string.Join(Environment.NewLine, value.Tools);
+        LoadPicker(value?.Tools ?? []);
+    }
+
+    partial void OnIsAdvancedChanged(bool value) => OnPropertyChanged(nameof(ModeText));
+
+    partial void OnToolFilterChanged(string value) => RefreshVisibleTools();
+
+    /// <summary>
+    /// Everything, including servers that are not installed yet — the one grant a list of checkboxes
+    /// cannot express, so it is a checkbox of its own that disables the rest.
+    /// </summary>
+    partial void OnGrantEverythingChanged(bool value)
+    {
+        if (_syncing)
+        {
+            return;
+        }
+
+        _syncing = true;
+        foreach (var group in Groups)
+        {
+            group.IsGranted = value;
+            foreach (var tool in group.Tools)
+            {
+                tool.IsGranted = value;
+            }
+
+            group.RefreshSummary();
+        }
+
+        _syncing = false;
+    }
+
+    /// <summary>Builds the picker from the catalogue as it is right now, then ticks what this user holds.</summary>
+    private void LoadPicker(IReadOnlyList<string> patterns)
+    {
+        _syncing = true;
+        try
+        {
+            foreach (var group in Groups)
+            {
+                group.PropertyChanged -= OnGroupChanged;
+                foreach (var tool in group.Tools)
+                {
+                    tool.PropertyChanged -= OnToolChanged;
+                }
+            }
+
+            Groups.Clear();
+            foreach (var group in _catalog.Groups)
+            {
+                var row = new ToolGroupRow(group);
+                row.PropertyChanged += OnGroupChanged;
+                foreach (var tool in row.Tools)
+                {
+                    tool.PropertyChanged += OnToolChanged;
+                }
+
+                Groups.Add(row);
+            }
+
+            GrantEverything = patterns.Contains(PermissionsConfigurationRules.EverythingGrant, StringComparer.Ordinal);
+
+            var known = new HashSet<string>(StringComparer.Ordinal) { PermissionsConfigurationRules.EverythingGrant };
+            foreach (var group in Groups)
+            {
+                known.Add(group.Wildcard);
+                var wholeGroup = GrantEverything || patterns.Contains(group.Wildcard, StringComparer.Ordinal);
+                group.IsGranted = wholeGroup;
+                foreach (var tool in group.Tools)
+                {
+                    known.Add(tool.Name);
+                    tool.IsGranted = wholeGroup || patterns.Contains(tool.Name, StringComparer.Ordinal);
+                }
+
+                group.IsGranted = wholeGroup || (group.Tools.Count > 0 && group.Tools.All(t => t.IsGranted));
+                group.RefreshSummary();
+            }
+
+            KeptGrants.Clear();
+            foreach (var pattern in patterns.Where(p => !known.Contains(p)))
+            {
+                KeptGrants.Add(pattern);
+            }
+
+            OnPropertyChanged(nameof(HasKeptGrants));
+            RefreshVisibleTools();
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    /// <summary>A group's checkbox cascades to its tools: checked is "all of them, and any added later".</summary>
+    private void OnGroupChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_syncing || e.PropertyName != nameof(ToolGroupRow.IsGranted) || sender is not ToolGroupRow group)
+        {
+            return;
+        }
+
+        _syncing = true;
+        foreach (var tool in group.Tools)
+        {
+            tool.IsGranted = group.IsGranted;
+        }
+
+        if (!group.IsGranted)
+        {
+            GrantEverything = false;
+        }
+
+        group.RefreshSummary();
+        _syncing = false;
+    }
+
+    /// <summary>And a tool's checkbox reports back up, so the simple list never claims a whole service
+    /// that is only partly ticked.</summary>
+    private void OnToolChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_syncing || e.PropertyName != nameof(ToolRow.IsGranted) || sender is not ToolRow tool)
+        {
+            return;
+        }
+
+        _syncing = true;
+        tool.Group.IsGranted = tool.Group.Tools.Count > 0 && tool.Group.Tools.All(t => t.IsGranted);
+        if (!tool.IsGranted)
+        {
+            GrantEverything = false;
+        }
+
+        tool.Group.RefreshSummary();
+        _syncing = false;
+    }
+
+    private void RefreshVisibleTools()
+    {
+        var filter = ToolFilter.Trim();
+        VisibleTools.Clear();
+        foreach (var tool in Groups.SelectMany(g => g.Tools))
+        {
+            if (filter.Length == 0
+                || tool.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || tool.GroupName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            {
+                VisibleTools.Add(tool);
+            }
+        }
+
+        OnPropertyChanged(nameof(HasTools));
+    }
+
+    /// <summary>The patterns the picker currently describes, ready to store.</summary>
+    private IReadOnlyList<string> SelectedPatterns()
+    {
+        if (GrantEverything)
+        {
+            // Everything already covers whatever was kept, so saying both would only be noise.
+            return [PermissionsConfigurationRules.EverythingGrant];
+        }
+
+        var patterns = new List<string>();
+        foreach (var group in Groups)
+        {
+            if (group.IsGranted)
+            {
+                patterns.Add(group.Wildcard);
+                continue;
+            }
+
+            patterns.AddRange(group.Tools.Where(t => t.IsGranted).Select(t => t.Name));
+        }
+
+        patterns.AddRange(KeptGrants);
+        return patterns;
     }
 
     partial void OnExplainSummaryChanged(string value) => OnPropertyChanged(nameof(HasExplanation));
@@ -148,11 +355,127 @@ public sealed partial class PermissionsViewModel : ViewModelBase
             return;
         }
 
-        var grants = ParseGrants(Grants);
+        var grants = SelectedPatterns();
         _permissions.SetGrants(row.Id, grants);
         Reselect(row.Id);
-        StatusMessage = $"'{row.Name}' may now use {grants.Length} tool(s). Applies to its next request.";
+        StatusMessage = grants.Count == 0
+            ? $"'{row.Name}' may now use no tools."
+            : $"'{row.Name}' saved. Applies to its next request.";
     });
+
+    /// <summary>
+    /// Adds a grant by hand, for the one thing checkboxes cannot offer: a tool of a service that is not
+    /// connected, or a server that is not installed yet. A pattern the picker does know is ticked there
+    /// instead of being listed twice.
+    /// </summary>
+    [RelayCommand]
+    private void AddGrant()
+    {
+        var pattern = NewGrant.Trim();
+        if (pattern.Length == 0)
+        {
+            return;
+        }
+
+        if (pattern == PermissionsConfigurationRules.EverythingGrant)
+        {
+            GrantEverything = true;
+        }
+        else if (Groups.FirstOrDefault(g => string.Equals(g.Wildcard, pattern, StringComparison.Ordinal)) is { } group)
+        {
+            group.IsGranted = true;
+        }
+        else if (Groups.SelectMany(g => g.Tools)
+                     .FirstOrDefault(t => string.Equals(t.Name, pattern, StringComparison.Ordinal)) is { } tool)
+        {
+            tool.IsGranted = true;
+        }
+        else if (!KeptGrants.Contains(pattern, StringComparer.Ordinal))
+        {
+            KeptGrants.Add(pattern);
+            OnPropertyChanged(nameof(HasKeptGrants));
+        }
+
+        NewGrant = string.Empty;
+    }
+
+    /// <summary>Drops a hand-written grant. The picker's own rows are unticked rather than removed.</summary>
+    [RelayCommand]
+    private void RemoveGrant(string? pattern)
+    {
+        if (pattern is not null && KeptGrants.Remove(pattern))
+        {
+            OnPropertyChanged(nameof(HasKeptGrants));
+        }
+    }
+
+    /// <summary>Ticks every tool on offer. Leaves the kept grants and "everything" alone: this is a
+    /// shortcut through a long list, not a different kind of grant.</summary>
+    [RelayCommand]
+    private void SelectAllTools() => SetVisibleTools(true);
+
+    /// <summary>The way back out of a full list, and the thing people reach for before re-picking.</summary>
+    [RelayCommand]
+    private void SelectNoTools() => SetVisibleTools(false);
+
+    /// <summary>
+    /// Ticks or unticks the rows on screen, filter included — "select all" inside a search means the
+    /// matches, which is what makes a long list workable.
+    /// </summary>
+    private void SetVisibleTools(bool granted)
+    {
+        _syncing = true;
+        foreach (var tool in VisibleTools)
+        {
+            tool.IsGranted = granted;
+        }
+
+        foreach (var group in Groups)
+        {
+            group.IsGranted = group.Tools.Count > 0 && group.Tools.All(t => t.IsGranted);
+            group.RefreshSummary();
+        }
+
+        if (!granted)
+        {
+            GrantEverything = false;
+        }
+
+        _syncing = false;
+    }
+
+    /// <summary>
+    /// Toggles the rows a person has selected in the list, which is what Space does to a multi-selection.
+    /// Mixed selections all go the same way — on if any is off — so one press has one obvious outcome.
+    /// </summary>
+    public void ToggleTools(IReadOnlyList<ToolRow> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        if (tools.Count == 0)
+        {
+            return;
+        }
+
+        var granted = !tools.All(t => t.IsGranted);
+        _syncing = true;
+        foreach (var tool in tools)
+        {
+            tool.IsGranted = granted;
+        }
+
+        foreach (var group in tools.Select(t => t.Group).Distinct())
+        {
+            group.IsGranted = group.Tools.Count > 0 && group.Tools.All(t => t.IsGranted);
+            group.RefreshSummary();
+        }
+
+        if (!granted)
+        {
+            GrantEverything = false;
+        }
+
+        _syncing = false;
+    }
 
     [RelayCommand]
     private void RevokeAll() => Run(() =>
@@ -214,13 +537,6 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         var at = tool.IndexOf(ProxyConstants.NamespaceSeparator, StringComparison.Ordinal);
         return at > 0 ? tool[..at] : tool;
     }
-
-    /// <summary>One grant per line, trimmed, blanks dropped — a text box rather than a grid because a
-    /// grant is a short string and an operator pasting five of them should not click five times.</summary>
-    private static string[] ParseGrants(string text) =>
-    [
-        .. text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-    ];
 
     /// <summary>Rebuilds the list and puts the selection back where it was, so saving a grant does not
     /// close the editor the operator is still working in.</summary>
