@@ -193,6 +193,7 @@ public static class Composition
         services.AddSingleton<RouterViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<RecipesViewModel>();
+        services.AddSingleton<PermissionsViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<UpdatesViewModel>();
     }

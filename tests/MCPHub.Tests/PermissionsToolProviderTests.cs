@@ -104,7 +104,7 @@ public sealed class PermissionsToolProviderTests : IDisposable
         var key = created.GetProperty("key").GetString()!;
 
         Assert.NotEmpty(key);
-        Assert.NotEmpty(created.GetProperty("notice").GetString());
+        Assert.NotEmpty(created.GetProperty("notice").GetString()!);
         Assert.Equal("Banter", store.Resolve(key)!.Name);
 
         // And nothing else will ever give it back.
@@ -140,8 +140,9 @@ public sealed class PermissionsToolProviderTests : IDisposable
             provider, "set_grants", new { principal = "agent", tools = new[] { "redis__get" } });
 
         Assert.Equal(["redis__get"], store.Resolve(key)!.Tools);
-        Assert.Equal(["redis__get"],
-            changed.GetProperty("principal").GetProperty("tools").EnumerateArray().Select(t => t.GetString()).ToArray());
+        Assert.Equal(
+            ["redis__get"],
+            changed.GetProperty("principal").GetProperty("tools").EnumerateArray().Select(t => t.GetString()!).ToArray());
     }
 
     [Fact]

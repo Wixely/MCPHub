@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MCPHub.App.ViewModels"
+             x:Class="MCPHub.App.Views.PermissionsView"
+             x:DataType="vm:PermissionsViewModel">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="PermissionsCardBackground" Color="#08000000"/>
+          <SolidColorBrush x:Key="PermissionsCardBorder" Color="#40000000"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="PermissionsCardBackground" Color="#10FFFFFF"/>
+          <SolidColorBrush x:Key="PermissionsCardBorder" Color="#40FFFFFF"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+      <TextBlock Text="Permissions" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Text="Who may use this proxy, and which of its tools. A caller presents a key and sees only what its principal is granted."
+                 Opacity="0.65" TextWrapping="Wrap"/>
+      <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="18">
+
+        <Border IsVisible="{Binding HasConfigurationError}" Background="#33F85149" BorderBrush="#66F85149"
+                BorderThickness="1" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Permissions are not loaded" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding ConfigurationError}" TextWrapping="Wrap"/>
+            <TextBlock Text="No key is recognised while this stands, and changes here will not save — the existing file is left untouched rather than overwritten."
+                       FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+
+        <Border IsVisible="{Binding HasWarning}" Background="#33D29922" BorderBrush="#66D29922"
+                BorderThickness="1" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="4">
+            <TextBlock Text="These grants are not being applied" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Warning}" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+
+        <Border Background="{DynamicResource PermissionsCardBackground}" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="10">
+            <CheckBox IsChecked="{Binding KeysEnforced}" Content="Require a key"/>
+            <TextBlock Text="On, a caller with no key is refused and each key sees only its own grants. Off — the default — every caller is served as the single user and gets every tool, which is how MCPHub has always behaved on its own machine."
+                       FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
+            <CheckBox IsChecked="{Binding ManageThroughProxy}" IsEnabled="{Binding CanEditManageThroughProxy}"
+                      Content="Let callers manage these permissions through the proxy"/>
+            <TextBlock Text="Needed for another application to administer this policy for you. Off by default: these tools govern every other tool, so a caller holding them can grant itself anything."
+                       FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
+            <TextBlock IsVisible="{Binding IsManageThroughProxyPinned}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                       Text="{Binding ManageThroughProxyPinnedBy, StringFormat='Pinned by the environment: {0}. The checkbox cannot be changed while that is set.'}"/>
+          </StackPanel>
+        </Border>
+
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Principals" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="Add principal" Command="{Binding AddPrincipalCommand}"/>
+          </Grid>
+          <TextBlock IsVisible="{Binding HasNoPrincipals}" Opacity="0.7" TextWrapping="Wrap"
+                     Text="No principals yet. Add one to issue a key — until then, and while a key is not required, every caller gets every tool."/>
+          <ListBox IsVisible="{Binding HasPrincipals}" ItemsSource="{Binding Principals}"
+                   SelectedItem="{Binding SelectedPrincipal}" MaxHeight="260">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:PermissionsPrincipalRow">
+                <Grid ColumnDefinitions="2*,Auto,3*,Auto" ColumnSpacing="12">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding State}" Opacity="0.7" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="2" Text="{Binding GrantSummary}" Opacity="0.75"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="3" Text="{Binding KeyFingerprint}" Opacity="0.5" VerticalAlignment="Center"
+                             FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+
+        <Border x:Name="Editor" IsVisible="{Binding IsEditorOpen}" Background="{DynamicResource PermissionsCardBackground}"
+                BorderBrush="{DynamicResource PermissionsCardBorder}" BorderThickness="1" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold"/>
+            <TextBox Watermark="Name — an agent's nickname, or the application holding the key"
+                     Text="{Binding PrincipalName}"/>
+            <CheckBox IsChecked="{Binding PrincipalEnabled}" Content="Enabled"/>
+            <TextBlock Text="Suspending keeps the grants and stops the key at once. To a caller it is indistinguishable from a key that was never issued."
+                       FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
+            <TextBlock Text="Tool grants, one per line" FontWeight="SemiBold" Margin="0,4,0,0"/>
+            <TextBox Text="{Binding PrincipalGrants}" AcceptsReturn="True" MinHeight="90"
+                     FontFamily="Cascadia Mono,Consolas,monospace"
+                     Watermark="kodi__play_pause&#x0a;redis__*&#x0a;*"/>
+            <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                       Text="An exact tool name, every tool of one server (redis__*), or everything (*). Use * only for an application you trust to administer this hub: it covers servers that are not installed yet, which is what makes installing possible, and it covers these permission tools too."/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"/>
+              <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+              <Button Content="Rotate key" Command="{Binding RotateKeyCommand}" IsVisible="{Binding HasPrincipalSelected}"/>
+              <Button Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding HasPrincipalSelected}"/>
+            </StackPanel>
+            <TextBlock IsVisible="{Binding HasPrincipalSelected}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"
+                       Text="Rotating takes effect immediately and retires the previous key. It does not save the form above."/>
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="GeneratedKeyCard" IsVisible="{Binding HasGeneratedKey}"
+                Background="{DynamicResource PermissionsCardBackground}" CornerRadius="6" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding GeneratedKeyNotice}" TextWrapping="Wrap"/>
+            <TextBox Text="{Binding GeneratedKey, Mode=OneWay}" IsReadOnly="True" PasswordChar="●"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Copy new key" Click="OnCopyKey"/>
+              <Button Content="Dismiss key" Command="{Binding DismissKeyCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Background="{DynamicResource PermissionsCardBackground}" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Why can this caller not use a tool?" FontSize="16" FontWeight="SemiBold"/>
+            <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                       Text="A tool can be withheld by a grant and by a feature switch at the same time, and an environment variable can be pinning either. Granting the tool then changes nothing, which looks like the grant failed. This lists every reason at once."/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox Text="{Binding ExplainTool}" Watermark="A tool name as the proxy advertises it, e.g. mcphub__install"/>
+              <Button Grid.Column="1" Content="Explain" Command="{Binding ExplainCommand}"/>
+            </Grid>
+            <TextBlock IsVisible="{Binding HasExplanation}" Text="{Binding ExplainSummary}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+            <ItemsControl IsVisible="{Binding HasDenials}" ItemsSource="{Binding Denials}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PermissionsDenialRow">
+                  <Border Background="#1AF85149" BorderBrush="#40F85149" BorderThickness="1" CornerRadius="6"
+                          Padding="12" Margin="0,0,0,8">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                      <TextBlock IsVisible="{Binding HasRemedy}" Text="{Binding Remedy}" TextWrapping="Wrap" Opacity="0.8"/>
+                      <TextBlock IsVisible="{Binding IsPinned}" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="12"
+                                 Text="{Binding PinnedBy, StringFormat='Forced by the environment: {0} — changing the setting here will not help.'}"/>
+                      <TextBlock Text="{Binding Code}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" Opacity="0.5"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

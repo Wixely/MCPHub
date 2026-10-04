@@ -28,7 +28,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NavItem> NavItems { get; }
 
-    public MainWindowViewModel(ServicesViewModel services, AgentViewModel agent, SlopworksViewModel slopworks, LogsViewModel logs, ProxyViewModel proxy, RouterViewModel router, DiagnosticsViewModel diagnostics, RecipesViewModel recipes, SettingsViewModel settings, UpdatesViewModel updates)
+    public MainWindowViewModel(ServicesViewModel services, AgentViewModel agent, SlopworksViewModel slopworks, LogsViewModel logs, ProxyViewModel proxy, RouterViewModel router, DiagnosticsViewModel diagnostics, RecipesViewModel recipes, PermissionsViewModel permissions, SettingsViewModel settings, UpdatesViewModel updates)
     {
         _logs = logs;
         _logsNav = new NavItem("Logs", logs);
@@ -43,6 +43,9 @@ public partial class MainWindowViewModel : ViewModelBase
             new NavItem("Router", router),
             new NavItem("Diagnostics", diagnostics),
             new NavItem("Recipes", recipes),
+            // Beside Recipes rather than inside Settings: it owns a concept of its own — who may use
+            // this proxy — and the switches that belong to it are on the page they govern.
+            new NavItem("Permissions", permissions),
             new NavItem("Settings", settings),
             new NavItem("Updates", updates),
         ];
