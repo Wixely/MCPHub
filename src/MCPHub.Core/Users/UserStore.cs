@@ -23,10 +23,14 @@ public sealed class UserStore : IWritableUsers
         _path = Path.Combine(paths.SettingsDirectory, "users.json");
         try
         {
-            _current = File.Exists(_path)
+            var stored = File.Exists(_path)
                 ? JsonSerializer.Deserialize(File.ReadAllText(_path), UsersJsonContext.Default.HubUsersConfiguration)
                   ?? new HubUsersConfiguration()
                 : new HubUsersConfiguration();
+
+            // See UserDirectoryRules.Validate: an absent member arrives null, so it is filled in here and
+            // the rest of the hub only ever sees a list.
+            _current = stored with { Users = stored.Users ?? [] };
             UserDirectoryRules.Validate(_current);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException

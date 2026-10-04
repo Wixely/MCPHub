@@ -78,7 +78,9 @@ public sealed class UsersDeploymentSource : IUserDirectory
                            File.ReadAllText(_path), UsersJsonContext.Default.UsersDeploymentConfiguration)
                        ?? throw new ArgumentException("Empty users document.");
 
-        var users = document.Users.Select(u =>
+        // An absent member deserialises to null rather than its initialiser, so a document naming no
+        // users at all means exactly that.
+        var users = (document.Users ?? []).Select(u =>
         {
             if (u is null)
             {

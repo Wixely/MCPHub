@@ -32,7 +32,7 @@ public static class PermissionsConfigurationRules
             return false;
         }
 
-        foreach (var pattern in grant.Tools)
+        foreach (var pattern in grant.Tools ?? [])
         {
             if (pattern is EverythingGrant)
             {
@@ -72,7 +72,11 @@ public static class PermissionsConfigurationRules
         ArgumentNullException.ThrowIfNull(configuration);
 
         var users = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var grant in configuration.Grants)
+
+        // Null rather than empty is what a document written before this property existed deserialises to,
+        // since the source-generated reader leaves an absent member at its default and does not run the
+        // property initialiser. Treated as "nothing granted", which is what such a document meant.
+        foreach (var grant in configuration.Grants ?? [])
         {
             if (grant is null || string.IsNullOrWhiteSpace(grant.UserId))
             {
@@ -84,7 +88,7 @@ public static class PermissionsConfigurationRules
                 throw new ArgumentException($"User '{grant.UserId}' has more than one set of grants.");
             }
 
-            foreach (var pattern in grant.Tools)
+            foreach (var pattern in grant.Tools ?? [])
             {
                 if (string.IsNullOrWhiteSpace(pattern) || pattern.Length > 256
                     || pattern.Any(char.IsControl) || pattern.Any(char.IsWhiteSpace))

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MCPHub.Core.Infrastructure;
+using MCPHub.Core.Users;
 
 namespace MCPHub.Core.Permissions;
 
@@ -16,20 +17,34 @@ public sealed class PermissionsStore : IWritablePermissions
     private readonly object _gate = new();
     private PermissionsConfiguration _current;
 
-    public PermissionsStore(IAppPaths paths)
+    /// <param name="users">Where a document that still carries its own principals is migrated to. Null
+    /// means no migration is possible — a mounted directory, or a caller that has none — and such a
+    /// document then grants nothing rather than stopping the hub.</param>
+    public PermissionsStore(IAppPaths paths, IWritableUsers? users = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         _path = Path.Combine(paths.SettingsDirectory, "permissions.json");
         try
         {
-            _current = File.Exists(_path)
+            var stored = File.Exists(_path)
                 ? JsonSerializer.Deserialize(File.ReadAllText(_path), PermissionsJsonContext.Default.PermissionsConfiguration)
                   ?? new PermissionsConfiguration()
                 : new PermissionsConfiguration();
+
+            // A property absent from the file arrives null, not at its initialiser: the source-generated
+            // reader does not run those. So a document written before grants existed has none at all, and
+            // null here would be a crash on the way to the first page.
+            _current = stored with
+            {
+                Grants = stored.Grants is null
+                    ? users is null ? [] : PermissionsUserMigration.Migrate(_path, users)
+                    : stored.Grants,
+            };
+
             PermissionsConfigurationRules.Validate(_current);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
-                                       or ArgumentException or FormatException)
+                                       or ArgumentException or FormatException or InvalidOperationException)
         {
             // Start empty rather than throwing, and say so: a hub that will not launch because one file
             // is corrupt is worse than one that launches granting nothing and reports why. An empty

@@ -18,7 +18,11 @@ public static class UserDirectoryRules
         ArgumentNullException.ThrowIfNull(configuration);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var user in configuration.Users)
+
+        // Null rather than empty is what an absent member deserialises to: the source-generated reader
+        // leaves it at its default and does not run the property initialiser. "No users" is what such a
+        // document means.
+        foreach (var user in configuration.Users ?? [])
         {
             if (user is null)
             {
@@ -30,7 +34,7 @@ public static class UserDirectoryRules
                 throw new ArgumentException("Each user needs its own non-empty id.");
             }
 
-            if (user.Name.Length > 128 || user.Name.Any(char.IsControl))
+            if (user.Name is null || user.Name.Length > 128 || user.Name.Any(char.IsControl))
             {
                 throw new ArgumentException("A user name must be short and printable.");
             }
@@ -43,8 +47,8 @@ public static class UserDirectoryRules
 
         // Ordinal-ignore-case: two hashes differing only in case are the same key written twice, and
         // treating them as distinct would hide the collision.
-        if (configuration.Users.Select(u => u.KeyHash)
-                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.Users.Length)
+        var stored = configuration.Users ?? [];
+        if (stored.Select(u => u.KeyHash).Distinct(StringComparer.OrdinalIgnoreCase).Count() != stored.Length)
         {
             throw new ArgumentException("Each user must have a unique key.");
         }

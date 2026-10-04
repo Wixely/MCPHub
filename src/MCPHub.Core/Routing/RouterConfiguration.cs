@@ -3,7 +3,7 @@ namespace MCPHub.Core.Routing;
 public sealed record RouterConfiguration
 {
     public int SchemaVersion { get; init; } = 1;
-    public int Port { get; init; } = 5801;
+    public int Port { get; init; } = RouterConfigurationRules.DefaultPort;
 
     /// <summary>
     /// Address the listener binds to. <c>127.0.0.1</c> (the default) keeps the Router on this machine;

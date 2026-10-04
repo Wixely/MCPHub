@@ -5,6 +5,9 @@ namespace MCPHub.Core.Routing;
 /// <summary>Shared validation for every router configuration source.</summary>
 public static class RouterConfigurationRules
 {
+    /// <summary>The listener port a configuration that names none is taken to mean.</summary>
+    public const int DefaultPort = 5801;
+
     /// <summary>IPv4 loopback — the default bind, reachable only from this machine.</summary>
     public const string Loopback = "127.0.0.1";
 

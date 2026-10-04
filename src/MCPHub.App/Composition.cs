@@ -96,7 +96,8 @@ public static class Composition
         services.AddSingleton<IWritableUsers>(sp => sp.GetRequiredService<UserStore>());
 
         // What each user may use. Grants only — the directory above says who they are.
-        services.AddSingleton<PermissionsStore>();
+        services.AddSingleton(sp => new PermissionsStore(
+            sp.GetRequiredService<IAppPaths>(), sp.GetRequiredService<IWritableUsers>()));
         services.AddSingleton<IPermissionsConfigurationSource>(sp => sp.GetRequiredService<PermissionsStore>());
         services.AddSingleton<IWritablePermissions>(sp => sp.GetRequiredService<PermissionsStore>());
 

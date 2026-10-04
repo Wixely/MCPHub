@@ -72,8 +72,12 @@ public sealed class PermissionsDeploymentSource : IPermissionsConfigurationSourc
         var document = JsonSerializer.Deserialize(
                            File.ReadAllText(_path), PermissionsJsonContext.Default.PermissionsConfiguration)
                        ?? throw new ArgumentException("Empty permissions document.");
-        PermissionsConfigurationRules.Validate(document);
-        return document;
+
+        // An absent member deserialises to null rather than its initialiser, so a document with no
+        // grants section grants nothing — which is what it says.
+        var normalised = document with { Grants = document.Grants ?? [] };
+        PermissionsConfigurationRules.Validate(normalised);
+        return normalised;
     }
 
     private static bool IsConfigurationError(Exception ex) =>

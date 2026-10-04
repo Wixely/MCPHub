@@ -40,7 +40,7 @@ public sealed class StaticPermissionsSource : IPermissionsConfigurationSource
     {
         ArgumentNullException.ThrowIfNull(configuration);
         PermissionsConfigurationRules.Validate(configuration);
-        _configuration = configuration;
+        _configuration = configuration with { Grants = configuration.Grants ?? [] };
     }
 
     public PermissionsConfiguration Snapshot => _configuration with { Grants = [.. _configuration.Grants] };

@@ -81,7 +81,7 @@ public sealed class StaticUserDirectory : IUserDirectory
     {
         ArgumentNullException.ThrowIfNull(configuration);
         UserDirectoryRules.Validate(configuration);
-        _configuration = configuration;
+        _configuration = configuration with { Users = configuration.Users ?? [] };
     }
 
     public HubUsersConfiguration Snapshot => _configuration with { Users = [.. _configuration.Users] };

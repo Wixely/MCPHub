@@ -31,7 +31,17 @@ public sealed class RouterStore : IRouterConfigurationSource, IUserDependent
                 : new();
             // Settings added after a file was written arrive absent, not defaulted. Filling the bind address
             // in here means the rest of the app only ever sees a concrete one, and the next save records it.
-            _current = _current with { BindAddress = RouterConfigurationRules.CoerceBindAddress(_current.BindAddress) };
+            // Members absent from the file arrive at their default rather than their initialiser — the
+            // source-generated reader does not run those — so each one that has a meaning when missing is
+            // filled in here, and the rest of the app only ever sees a complete configuration.
+            _current = _current with
+            {
+                BindAddress = RouterConfigurationRules.CoerceBindAddress(_current.BindAddress),
+                Port = _current.Port == 0 ? RouterConfigurationRules.DefaultPort : _current.Port,
+                SchemaVersion = _current.SchemaVersion == 0 ? 1 : _current.SchemaVersion,
+                Inputs = _current.Inputs ?? [],
+                Outputs = _current.Outputs ?? [],
+            };
             if (RouterUserMigration.IsNeeded(_current))
             {
                 _current = _current with { Inputs = Migrate() };
