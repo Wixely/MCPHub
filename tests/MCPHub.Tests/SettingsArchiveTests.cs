@@ -5,6 +5,7 @@ using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Models;
 using MCPHub.Core.Recipes;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 using MCPHub.Core.Settings;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -134,11 +135,14 @@ public sealed class SettingsArchiveTests
     {
         using var source = new Hub();
         var outputId = source.Router.SaveOutput(null, "Cloud", "https://api.example.com/v1", "gpt-x", "sk-upstream-example");
-        var agent = source.Router.AddInput("Coding agent", outputId);
+        var agent = source.AddAgent("Coding agent", outputId);
         source.Router.Configure("0.0.0.0", 5810, true);
 
         var path = source.ArchivePath();
-        await source.Archive.ExportAsync(path, [SettingsCategory.Router], password: null);
+
+        // Users travel with the routes: a route names a user, so taking one without the other would land
+        // routes on the far side that nobody holds a key for.
+        await source.Archive.ExportAsync(path, [SettingsCategory.Users, SettingsCategory.Router], password: null);
 
         // The plaintext archive must not contain the key in any form.
         using (var zip = ZipFile.OpenRead(path))
@@ -151,7 +155,7 @@ public sealed class SettingsArchiveTests
         }
 
         using var target = new Hub();
-        var result = await target.Archive.ImportAsync(path, [SettingsCategory.Router], null);
+        var result = await target.Archive.ImportAsync(path, [SettingsCategory.Users, SettingsCategory.Router], null);
 
         var imported = Assert.Single(target.Router.Snapshot.Outputs);
         Assert.Equal("gpt-x", imported.Model);
@@ -159,7 +163,8 @@ public sealed class SettingsArchiveTests
         Assert.Contains(result.Notes, n => n.Contains("without an upstream key"));
 
         // The agent's existing key keeps working on the new machine, which is the point of moving routes.
-        Assert.Equal("Coding agent", Assert.Single(target.Router.Snapshot.Inputs).Name);
+        Assert.Equal(agent.Id, Assert.Single(target.Router.Snapshot.Inputs).UserId);
+        Assert.Equal("Coding agent", Assert.Single(target.Users.Snapshot.Users).Name);
         Assert.NotNull(target.Router.Resolve(agent.Key));
         Assert.Equal("0.0.0.0", target.Router.Snapshot.BindAddress);
         Assert.Equal(5810, target.Router.Snapshot.Port);
@@ -267,6 +272,7 @@ public sealed class SettingsArchiveTests
         public SecretStore Secrets { get; }
         public RecipeStore Recipes { get; }
         public RouterStore Router { get; }
+        public UserStore Users { get; }
         public SettingsArchiveService Archive { get; }
 
         public Hub()
@@ -275,8 +281,17 @@ public sealed class SettingsArchiveTests
             Settings = new(this, NullLogger<SettingsStore>.Instance);
             Secrets = new(this, NullLogger<SecretStore>.Instance);
             Recipes = new(this, NullLogger<RecipeStore>.Instance);
-            Router = new(this);
-            Archive = new(Settings, Secrets, Recipes, Router, NullLogger<SettingsArchiveService>.Instance);
+            Users = new(this);
+            Router = new(this, Users);
+            Archive = new(Settings, Secrets, Recipes, Router, Users, NullLogger<SettingsArchiveService>.Instance);
+        }
+
+        /// <summary>A caller with Router access: a user holding a key, and a route for it.</summary>
+        public (string Id, string Key) AddAgent(string name, string? outputId = null)
+        {
+            var (user, key) = Users.Create(name);
+            Router.SetRoute(user.Id, outputId);
+            return (user.Id, key);
         }
 
         public string ArchivePath() => Path.Combine(SettingsDirectory, "export.zip");

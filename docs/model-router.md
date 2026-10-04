@@ -7,9 +7,14 @@ The Router connects multiple agents to model APIs through one stable local addre
 1. Open **Router**, choose **Add output**, and enter a name and the provider's API base URL. Include any required path prefix, such as `http://localhost:8000/v1` or `https://api.openai.com/v1`.
 2. Enter an upstream bearer key if the provider requires one. For an unauthenticated local model, leave it blank. Optionally set **Model sent to provider** so the hub chooses the model even when an agent sends a different model name.
 3. Click **Add output**, select it under **Global default**, and **Apply default**.
-4. Choose **Add agent**, enter an agent name, select **Use global default** or a specific output, and **Add agent and generate key**. Copy the generated key before dismissing it. Only its hash is retained; edit the agent and use **Rotate this agent's key** if the original is lost.
-5. Configure that agent's OpenAI-compatible API base URL as `http://127.0.0.1:5801/v1` and its API key as the generated input key. Keep its ordinary model setting if the output has no model override.
-6. Click **Start router**. Enable **Start when MCPHub launches** and **Apply listener** if wanted.
+4. On the **Users** page, add the agent and copy the key it is given. That key is shown once; only its hash is kept, so a lost key is rotated there rather than looked up. A user that already exists needs nothing new — it keeps the key it has.
+5. Back on **Router**, choose **Give a user access**, pick that user, select **Use global default** or a specific output, and **Grant access**. No key is issued here: the Router says where a user's requests go, and the Users page says who it is.
+6. Configure that agent's OpenAI-compatible API base URL as `http://127.0.0.1:5801/v1` and its API key as the user's key. Keep its ordinary model setting if the output has no model override.
+7. Click **Start router**. Enable **Start when MCPHub launches** and **Apply listener** if wanted.
+
+Identity is shared with the rest of the hub, so the same key also reaches whatever tools that user is granted on the **Permissions** page — and suspending it on the Users page stops the Router and the proxy together. Revoking Router access here takes away only the Router.
+
+A `router.json` written before users existed is migrated on first load: each agent becomes a user keeping its id, name and key hash, so every key already issued keeps working and starts working on the proxy as well. The migrated routes are written back the next time anything on the page is saved.
 
 The Router stops with the desktop application. For server/container use, the [headless Router sample](../samples/HeadlessRouter/README.md) supplies a separate entry point, portable read-only configuration and secret-file support without Avalonia.
 
@@ -29,22 +34,22 @@ A pass reports the round trip and how many models the provider offers. When the 
 
 ## Agent activity
 
-Each agent row shows when that agent last reached the Router and how many requests it has made, so an agent that has silently stopped calling — or has never connected at all — is visible without reading any logs. A key that does not resolve to an enabled agent is counted separately and surfaced above the list, which is what a stale key on some agent looks like.
+Each row shows when that user last reached the Router and how many requests it has made, so an agent that has silently stopped calling — or has never connected at all — is visible without reading any logs. A key that does not resolve to a live user with Router access is counted separately and surfaced above the list, which is what a stale key on some agent looks like.
 
-Only a timestamp and a count are kept, per agent, in `router-activity.json` beside `router.json`. No prompt, completion, model name, URL or client address is recorded. The stamp is taken when a key authenticates, so it answers "did this agent reach the hub at all", independently of whether its provider then succeeded. Removing an agent discards its history. Losing the file loses only the counts.
+Only a timestamp and a count are kept, per user, in `router-activity.json` beside `router.json`. No prompt, completion, model name, URL or client address is recorded. The stamp is taken when a key authenticates, so it answers "did this agent reach the hub at all", independently of whether its provider then succeeded. Revoking Router access discards that user's history. Losing the file loses only the counts.
 
 ## Routing rules
 
-Saved agents and outputs have explicit **Edit** buttons. Editors identify the item being changed; **Add** creates a new item, **Save changes** updates the named item, and **Cancel** discards the draft. Saving closes the editor. Editing one section does not discard a draft in the other. Key rotation is a separate immediate action.
+Saved routes and outputs have explicit **Edit** buttons. Editors identify the item being changed; **Add** creates a new item, **Save changes** updates the named item, and **Cancel** discards the draft. Saving closes the editor. Editing one section does not discard a draft in the other. Keys are issued and rotated on the Users page, not here.
 
-Agent rows show their saved output assignment, including whether they follow the global default. A missing destination is shown explicitly. The agent editor previews the destination and provider model that will apply after saving. Setting an output's model does not assign any agents to that output.
+Rows show their saved output assignment, including whether they follow the global default, and whether the user is suspended. A missing destination is shown explicitly. The editor previews the destination and provider model that will apply after saving, and says when there is no user left to grant. Setting an output's model does not assign any agents to that output.
 
-- An enabled input is identified by its unique `Authorization: Bearer` key.
-- An explicit per-input output takes precedence over the global default. Changing the default does not alter overrides. Switch an input back to **Use global default** to have it follow global changes.
+- A caller is identified by its user's unique `Authorization: Bearer` key, and must hold Router access.
+- An explicit per-user output takes precedence over the global default. Changing the default does not alter overrides. Switch a route back to **Use global default** to have it follow global changes.
 - Output edits and route changes apply on the next request. An in-flight request keeps the output, credential and model selected when it began.
 - With no applicable output, authenticated requests receive `503 route_unavailable`.
-- Disabled, removed or rotated input keys receive `401`. Existing in-flight requests are not revoked; stopping the Router cancels them.
-- An output cannot be removed while a default or input override references it. Reassign those routes first.
+- A suspended or deleted user, a rotated key, and a user with no Router access all receive `401`. Existing in-flight requests are not revoked; stopping the Router cancels them.
+- An output cannot be removed while the global default or any route references it. Reassign those routes first.
 - Leaving the upstream-key field blank during an edit preserves its stored credential. **Clear stored upstream key on save** explicitly removes it.
 
 ## Supported APIs
@@ -71,11 +76,11 @@ Protocol references: [OpenAI Chat API](https://developers.openai.com/api/referen
 
 Configuration lives in `router.json` beside MCPHub's `settings.json`. Saves replace the file atomically; failed saves leave the previous in-memory configuration active. Invalid configuration disables Router configuration changes until the file is repaired and MCPHub restarted, without stopping the rest of the app.
 
-Routes travel between machines through **Settings → Back up and move settings**, which exports the Router category — listener settings, outputs and agents, with existing agent key hashes so those agents keep working. Upstream provider keys are excluded from an unencrypted archive and are re-wrapped for the destination machine only when the archive is exported with a password and the **Tokens and keys** category.
+Routes travel between machines through **Settings → Back up and move settings**, which exports the Router category — listener settings, outputs and routes. Export the **Users** category with it: routes name users, so taking one without the other lands routes nobody holds a key for, which the import reports. Upstream provider keys are excluded from an unencrypted archive and are re-wrapped for the destination machine only when the archive is exported with a password and the **Tokens and keys** category.
 
-Input keys contain 256 bits of random data and only SHA-256 hashes are stored. Output bearer keys are encrypted with current-user Windows DPAPI. On Linux, they use the same protection level as MCPHub's existing secret store: base64 encoding in an owner-only file, **not encryption**. Windows credentials cannot be transferred to another user or OS; re-enter them after migration. Keep this configuration out of source control.
+User keys contain 256 bits of random data and only SHA-256 hashes are stored. Output bearer keys are encrypted with current-user Windows DPAPI. On Linux, they use the same protection level as MCPHub's existing secret store: base64 encoding in an owner-only file, **not encryption**. Windows credentials cannot be transferred to another user or OS; re-enter them after migration. Keep this configuration out of source control.
 
-Only configured output credentials are forwarded. Input keys, agent cookies and arbitrary request headers are never forwarded. The Router does not log prompts, generated text, tokens, or request URLs. Route and credential editing is available only in the desktop UI; the model endpoint exposes no configuration API.
+Only configured output credentials are forwarded. Caller keys, agent cookies and arbitrary request headers are never forwarded. The Router does not log prompts, generated text, tokens, or request URLs. Route and credential editing is available only in the desktop UI; the model endpoint exposes no configuration API.
 
 ## Verification
 

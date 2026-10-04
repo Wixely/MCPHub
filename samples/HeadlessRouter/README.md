@@ -8,13 +8,14 @@ This runnable sample proves that a future Docker/server version of MCPHub can ho
 dotnet run --project samples/HeadlessRouter
 ```
 
-The copied `router.example.json` is deliberately empty: the listener starts on loopback port 5801 and rejects all model requests with 401 until agents are configured. The VS Code **Run/Debug Model Router (headless)** profile uses port 15801 to avoid the normal desktop Router port. Nothing starts or modifies the desktop instance.
+The copied `router.example.json` and `users.example.json` are deliberately empty: the listener starts on loopback port 5801 and rejects all model requests with 401 until users and routes are configured. The VS Code **Run/Debug Model Router (headless)** profile uses port 15801 to avoid the normal desktop Router port. Nothing starts or modifies the desktop instance.
 
 The executable supports interactive console use, Windows Service hosting through `AddWindowsService`, and systemd through `AddSystemd`. Service installation is an operator action; this sample does not install anything.
 
 | Environment variable | Meaning |
 | --- | --- |
-| `MCPHUB_ROUTER_CONFIG` | Absolute path to deployment JSON; defaults to the empty example beside the executable |
+| `MCPHUB_ROUTER_CONFIG` | Absolute path to the routing JSON; defaults to the empty example beside the executable |
+| `MCPHUB_USERS_CONFIG` | Absolute path to the users JSON — who holds which key; defaults to the empty example beside the executable |
 | `MCPHUB_ROUTER_BIND` | IPv4/IPv6 bind address; overrides the config file's `BindAddress`, which itself defaults to `127.0.0.1`; use `0.0.0.0` inside Docker |
 | `MCPHUB_ROUTER_PORT` | Optional port override, 1024–65535; otherwise JSON `Port` is used |
 
@@ -22,7 +23,27 @@ Configuration is read-only. It does not use `AppPaths`, a user's desktop profile
 
 ## Deployment configuration
 
-Create your own `router.json` using this shape (property names are case-sensitive):
+Two documents, because identity and access are two questions: `users.json` says who holds which key, and `router.json` says where each user's requests go. The same users file serves the proxy in a full MCPHub deployment, so one key reaches a caller's models and its tools.
+
+Create your own `users.json` using this shape (property names are case-sensitive):
+
+```json
+{
+  "SchemaVersion": 1,
+  "Users": [
+    {
+      "Id": "coding-agent",
+      "Name": "Coding agent",
+      "Enabled": true,
+      "KeyFile": "/run/secrets/agent_key"
+    }
+  ]
+}
+```
+
+For each user, supply exactly one of `KeyFile`, `KeyEnvironmentVariable`, or `KeyHash` (hex SHA-256 of its bearer key). Raw keys must have 32–256 characters; use cryptographically random ones, and configure the same raw key in the agent. `Enabled: false` is one switch that stops that caller everywhere at once, and to the caller it is indistinguishable from a key that was never issued.
+
+Then your own `router.json`:
 
 ```json
 {
@@ -41,10 +62,7 @@ Create your own `router.json` using this shape (property names are case-sensitiv
   ],
   "Inputs": [
     {
-      "Id": "coding-agent",
-      "Name": "Coding agent",
-      "Enabled": true,
-      "KeyFile": "/run/secrets/agent_key",
+      "UserId": "coding-agent",
       "OutputId": null
     }
   ]
@@ -53,11 +71,13 @@ Create your own `router.json` using this shape (property names are case-sensitiv
 
 Replace `BaseUrl` with a provider reachable from the container. Container `localhost` addresses the container itself, not the host or another container. Change or omit `Model` as needed.
 
-For each input, supply exactly one of `KeyFile`, `KeyEnvironmentVariable`, or `KeyHash` (hex SHA-256 of its bearer key). Raw input keys must have 32–256 characters; use cryptographically random keys. Configure the same raw key in the agent. Setting `OutputId` overrides the global default; null follows it.
+Each input names a `UserId` from the users document and nothing else. A user with no input has no Router access at all, rather than falling back to the default output — reaching a model is a grant of its own. Setting `OutputId` overrides the global default; null follows it.
+
+An input that still carries `Name`, `KeyHash`, `KeyFile` or `KeyEnvironmentVariable` is refused at startup by name: those moved to the users document, and silently ignoring them would start a host that let nobody in and said nothing about why.
 
 For outputs, supply at most one of `ApiKeyFile` or `ApiKeyEnvironmentVariable`. Omit both for an unauthenticated local model. When a secret reference is supplied, a missing/empty secret is an error; authentication is never silently removed. Secret files may end with a newline. Plaintext credential properties and desktop `ProtectedApiKey` values are not accepted.
 
-The host polls the file and referenced secrets every five seconds. A successful reload swaps inputs, routes, output credentials and model settings as one snapshot. In-flight requests keep their captured route and credential. Malformed JSON, unresolved secrets, duplicate keys, invalid routes or a port change reject the entire reload, keep the last valid configuration active, and log a redacted warning. Correcting the configuration clears the warning. **Deleting a secret file does not revoke its last loaded key**: disable/remove the input in valid configuration to revoke it. Bind/port changes and changes to process environment values require a restart.
+The host polls both documents and their referenced secrets every five seconds, together — a key added to one and a route to the other take effect in the same tick. A successful reload swaps users, routes, output credentials and model settings as one snapshot. In-flight requests keep their captured route and credential. Malformed JSON, unresolved secrets, duplicate keys, invalid routes or a port change reject the entire reload, keep the last valid configuration active, and log a redacted warning. Correcting the configuration clears the warning. **Deleting a secret file does not revoke its last loaded key**: set `Enabled: false` or remove the user in valid configuration to revoke it. Bind/port changes and changes to process environment values require a restart.
 
 To replace credentials while keeping routes stable, update the referenced secret file and wait for reload. Initial configuration errors fail startup; unlike the desktop fallback, the host cannot run with a silently empty configuration.
 
@@ -69,7 +89,7 @@ The Dockerfile uses the normal .NET 10 runtime and the image's non-root user. It
 docker build -f samples/HeadlessRouter/Dockerfile -t mcphub-router:local .
 ```
 
-Copy the example configuration above to `samples/HeadlessRouter/router.json`, create the `secrets` directory there, and put the agent/provider keys in `agent.key` and `model.key`. Keep these files out of source control; repository ignore rules cover them. Ensure the mounted configuration and secrets are readable by the image's non-root user.
+Copy the example configuration above to `samples/HeadlessRouter/router.json` and `samples/HeadlessRouter/users.json`, create the `secrets` directory there, and put the agent/provider keys in `agent.key` and `model.key`. Keep these files out of source control; repository ignore rules cover them. Ensure the mounted configuration and secrets are readable by the image's non-root user.
 
 ```powershell
 docker compose -f samples/HeadlessRouter/compose.yaml up --build
@@ -87,7 +107,7 @@ Example Windows publish command:
 dotnet publish samples/HeadlessRouter -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/router-win
 ```
 
-Register `HeadlessRouter.exe` with the Windows Service Control Manager using an operator-chosen service account, and configure its environment with `MCPHUB_ROUTER_CONFIG` pointing to readable deployment configuration. The service name is **MCPHub Model Router**. Do not rely on an interactive user's environment being available to the service.
+Register `HeadlessRouter.exe` with the Windows Service Control Manager using an operator-chosen service account, and configure its environment with `MCPHUB_ROUTER_CONFIG` and `MCPHUB_USERS_CONFIG` pointing to readable deployment configuration. The service name is **MCPHub Model Router**. Do not rely on an interactive user's environment being available to the service.
 
 For systemd, publish for `linux-x64` and use a unit such as:
 
@@ -102,6 +122,7 @@ User=mcphub
 WorkingDirectory=/opt/mcphub-router
 ExecStart=/opt/mcphub-router/HeadlessRouter
 Environment=MCPHUB_ROUTER_CONFIG=/etc/mcphub-router/router.json
+Environment=MCPHUB_USERS_CONFIG=/etc/mcphub-router/users.json
 Environment=MCPHUB_ROUTER_BIND=127.0.0.1
 Restart=on-failure
 NoNewPrivileges=true

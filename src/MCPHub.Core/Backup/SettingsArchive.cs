@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using MCPHub.Core.Recipes;
 using MCPHub.Core.Routing;
 using MCPHub.Core.Settings;
+using MCPHub.Core.Users;
 
 namespace MCPHub.Core.Backup;
 
@@ -23,7 +24,14 @@ public enum SettingsCategory
     /// <summary>The recipes knowledge base.</summary>
     Recipes,
 
-    /// <summary>Model Router listener, outputs and agents. Upstream keys travel only in an encrypted archive.</summary>
+    /// <summary>
+    /// Who may use this hub, with the hash of each one's key — so the keys callers already hold keep
+    /// working after an import. A hash cannot be used to authenticate, which is why it may travel in an
+    /// unencrypted archive; the keys themselves exist nowhere to export.
+    /// </summary>
+    Users,
+
+    /// <summary>Model Router listener, outputs and routes. Upstream keys travel only in an encrypted archive.</summary>
     Router,
 
     /// <summary>Window size and theme.</summary>
@@ -111,6 +119,14 @@ public sealed record RecipesSection
     public List<Recipe> Recipes { get; init; } = [];
 }
 
+/// <summary>What an archive holds for <see cref="SettingsCategory.Users"/>.</summary>
+public sealed record UsersSection
+{
+    /// <summary>Users as stored, key hashes included. Merged on import, never replaced wholesale: a local
+    /// caller the archive does not mention keeps its key.</summary>
+    public List<HubUser> Users { get; init; } = [];
+}
+
 /// <summary>
 /// Router routes. Output credentials are carried separately in <see cref="SecretsSection"/> so that an
 /// unencrypted archive can still move a topology between machines without leaking any key.
@@ -125,7 +141,11 @@ public sealed record RouterSection
     /// <summary>Outputs with <c>ProtectedApiKey</c> cleared; the plaintext key, if exported, is in the secrets section.</summary>
     public List<RouterOutput> Outputs { get; init; } = [];
 
-    /// <summary>Agents, including their key hashes, so existing agent keys keep working after an import.</summary>
+    /// <summary>
+    /// Which users may use the Router and where each one goes. Identity is not here any more — these name
+    /// users, so an archive carrying routes should carry <see cref="SettingsCategory.Users"/> too or the
+    /// routes arrive naming callers the destination has never heard of.
+    /// </summary>
     public List<RouterInput> Inputs { get; init; } = [];
 }
 
@@ -150,6 +170,7 @@ public sealed record SecretsSection
 [JsonSerializable(typeof(AppearanceSection))]
 [JsonSerializable(typeof(UserServersSection))]
 [JsonSerializable(typeof(RecipesSection))]
+[JsonSerializable(typeof(UsersSection))]
 [JsonSerializable(typeof(RouterSection))]
 [JsonSerializable(typeof(SecretsSection))]
 internal sealed partial class SettingsArchiveJsonContext : JsonSerializerContext;

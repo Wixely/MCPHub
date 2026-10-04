@@ -205,13 +205,13 @@ public sealed class RouterHost : IAsyncDisposable
         {
             _activity.RecordRejection();
             context.Response.Headers.WWWAuthenticate = "Bearer";
-            await ErrorAsync(context, 401, "invalid_api_key", "A valid enabled Router input key is required.");
+            await ErrorAsync(context, 401, "invalid_api_key", "A valid key for a user with Router access is required.");
             return;
         }
 
         // Recorded on authentication rather than on success, so "last connected" answers "did this agent
         // reach the hub at all" — which is the question asked when its requests start failing downstream.
-        _activity.RecordConnection(route.InputId);
+        _activity.RecordConnection(route.UserId);
 
         var path = context.Request.Path.Value;
         var allowed = HttpMethods.IsGet(context.Request.Method) && path == "/v1/models" ||

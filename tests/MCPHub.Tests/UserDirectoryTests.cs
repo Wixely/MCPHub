@@ -142,11 +142,11 @@ public sealed class UserDirectoryTests : IDisposable
         var (_, second) = store.Create("two");
 
         Assert.NotEqual(store.Resolve(first)!.Id, store.Resolve(second)!.Id);
-        Assert.Throws<ArgumentException>(() => store.Replace(
-        [
-            new HubUser { Id = "a", KeyHash = UserKeys.Hash(first) },
-            new HubUser { Id = "b", KeyHash = UserKeys.Hash(first) },
-        ]));
+
+        // And a key that already belongs to somebody cannot be adopted onto a second identity, which is
+        // the one way a duplicate could otherwise get in — migration and import both arrive that way.
+        Assert.Throws<ArgumentException>(
+            () => store.Adopt(new HubUser { Id = "other", Name = "Other", KeyHash = UserKeys.Hash(first) }));
     }
 
     // ---- persistence ---------------------------------------------------------------------------

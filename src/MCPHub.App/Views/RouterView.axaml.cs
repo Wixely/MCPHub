@@ -34,7 +34,6 @@ public partial class RouterView : UserControl
         {
             nameof(RouterViewModel.IsOutputEditorOpen) when _observed?.IsOutputEditorOpen == true => "OutputEditor",
             nameof(RouterViewModel.IsInputEditorOpen) when _observed?.IsInputEditorOpen == true => "InputEditor",
-            nameof(RouterViewModel.GeneratedKey) when _observed?.HasGeneratedKey == true => "GeneratedKeyCard",
             _ => null,
         };
         if (target is not null)
@@ -43,10 +42,6 @@ public partial class RouterView : UserControl
     private async void OnCopyUrl(object? sender, RoutedEventArgs e)
     {
         if (DataContext is RouterViewModel vm) await CopyAsync(vm.EndpointUrl);
-    }
-    private async void OnCopyKey(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is RouterViewModel { HasGeneratedKey: true } vm) await CopyAsync(vm.GeneratedKey);
     }
     private async Task CopyAsync(string text)
     {

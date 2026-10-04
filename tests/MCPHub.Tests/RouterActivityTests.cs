@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -27,8 +28,8 @@ public sealed class RouterActivityTests
         await using var upstream = await MockUpstream.StartAsync();
         var output = fixture.Store.SaveOutput(null, "Mock", upstream.Url, null, null);
         fixture.Store.SetDefault(output);
-        var agent = fixture.Store.AddInput("Agent", null);
-        var other = fixture.Store.AddInput("Quiet agent", null);
+        var agent = fixture.AddAgent("Agent", null);
+        var other = fixture.AddAgent("Quiet agent", null);
 
         await using var host = new RouterHost(fixture.Store, NullLogger<RouterHost>.Instance, activity: fixture.Activity);
         await host.StartAsync(portOverride: 0);
@@ -37,13 +38,13 @@ public sealed class RouterActivityTests
         await CallAsync(host, agent.Key);
         await CallAsync(host, agent.Key);
 
-        var seen = fixture.Activity.Get(fixture.Store.Resolve(agent.Key)!.InputId);
+        var seen = fixture.Activity.Get(fixture.Store.Resolve(agent.Key)!.UserId);
         Assert.True(seen.HasConnected);
         Assert.Equal(2, seen.RequestCount);
         Assert.InRange(seen.LastConnected, before, DateTimeOffset.UtcNow);
 
         // An agent that has not called is not credited with someone else's traffic.
-        Assert.False(fixture.Activity.Get(fixture.Store.Resolve(other.Key)!.InputId).HasConnected);
+        Assert.False(fixture.Activity.Get(fixture.Store.Resolve(other.Key)!.UserId).HasConnected);
 
         Assert.Null(fixture.Activity.LastRejection);
         await CallAsync(host, "mhrouter_not_a_real_key_at_all_0000");
@@ -54,15 +55,15 @@ public sealed class RouterActivityTests
     public async Task A_rejected_request_is_not_credited_to_any_agent()
     {
         using var fixture = new RouterFixture();
-        var agent = fixture.Store.AddInput("Agent", null);
-        var id = fixture.Store.Resolve(agent.Key)!.InputId;
-        fixture.Store.SaveInput(id, "Agent", null, enabled: false);
+        var agent = fixture.AddAgent("Agent", null);
+        var id = fixture.Store.Resolve(agent.Key)!.UserId;
+        fixture.Users.SetEnabled(id, enabled: false);
 
         await using var host = new RouterHost(fixture.Store, NullLogger<RouterHost>.Instance, activity: fixture.Activity);
         await host.StartAsync(portOverride: 0);
         await CallAsync(host, agent.Key);
 
-        // A disabled agent's key no longer resolves, so there is no agent to stamp — only the rejection.
+        // A suspended user's key no longer resolves, so there is no agent to stamp — only the rejection.
         Assert.False(fixture.Activity.Get(id).HasConnected);
         Assert.NotNull(fixture.Activity.LastRejection);
     }
@@ -97,7 +98,7 @@ public sealed class RouterActivityTests
         });
         var output = fixture.Store.SaveOutput(null, "Mock", upstream.Url, "secret-model-name", "secret-upstream-key");
         fixture.Store.SetDefault(output);
-        var agent = fixture.Store.AddInput("Agent", null);
+        var agent = fixture.AddAgent("Agent", null);
 
         await using var host = new RouterHost(fixture.Store, NullLogger<RouterHost>.Instance, activity: fixture.Activity);
         await host.StartAsync(portOverride: 0);

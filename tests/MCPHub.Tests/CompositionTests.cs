@@ -4,6 +4,7 @@ using MCPHub.Core.Management;
 using MCPHub.Core.Permissions;
 using MCPHub.Core.Users;
 using MCPHub.Core.Recipes;
+using MCPHub.Core.Routing;
 using MCPHub.Proxy;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -114,5 +115,28 @@ public sealed class CompositionTests
         var permissions = provider.GetRequiredService<PermissionsStore>();
         Assert.Same(permissions, provider.GetRequiredService<IPermissionsConfigurationSource>());
         Assert.Same(permissions, provider.GetRequiredService<IWritablePermissions>());
+
+        var router = provider.GetRequiredService<RouterStore>();
+        Assert.Same(router, provider.GetRequiredService<IRouterConfigurationSource>());
+    }
+
+    /// <summary>
+    /// Deleting a user must leave nothing behind, and that only works if every layer keyed to a user is
+    /// registered to be asked. A missing registration has no symptom at the time: the user goes, and a
+    /// grant or a route stays, naming an id nobody holds.
+    /// </summary>
+    [Fact]
+    public void Every_layer_keyed_to_a_user_is_asked_to_forget_it()
+    {
+        using var directory = new TempDir();
+        var services = new ServiceCollection();
+        Composition.ConfigureServices(services);
+        services.AddSingleton<IAppPaths>(new FakeAppPaths(directory.Path));
+
+        using var provider = services.BuildServiceProvider();
+        var dependents = provider.GetServices<IUserDependent>().ToList();
+
+        Assert.Contains(dependents, d => d is PermissionsStore);
+        Assert.Contains(dependents, d => d is RouterStore);
     }
 }

@@ -41,6 +41,7 @@ public sealed partial class UsersViewModel : ViewModelBase
 {
     private readonly UserStore _users;
     private readonly PermissionsStore _permissions;
+    private readonly IReadOnlyList<IUserDependent> _dependents;
     private readonly ISettingsStore _settings;
     private readonly AdministrationPolicy _administration;
 
@@ -59,10 +60,15 @@ public sealed partial class UsersViewModel : ViewModelBase
     [ObservableProperty] private string _generatedKeyNotice = string.Empty;
 
     public UsersViewModel(
-        UserStore users, PermissionsStore permissions, ISettingsStore settings, AdministrationPolicy administration)
+        UserStore users,
+        PermissionsStore permissions,
+        IEnumerable<IUserDependent> dependents,
+        ISettingsStore settings,
+        AdministrationPolicy administration)
     {
         _users = users;
         _permissions = permissions;
+        _dependents = [.. dependents];
         _settings = settings;
         _administration = administration;
         Refresh();
@@ -222,12 +228,16 @@ public sealed partial class UsersViewModel : ViewModelBase
 
         _users.Delete(row.Id);
 
-        // Grants go with the user, so nothing is left granting tools to an id nobody holds.
-        _permissions.ForgetUser(row.Id);
+        // Grants and the Router route go with the user, so nothing is left naming an id nobody holds.
+        // Each layer drops its own entry, which is why this is a loop rather than two calls by name.
+        foreach (var dependent in _dependents)
+        {
+            dependent.ForgetUser(row.Id);
+        }
         Cancel();
         DismissKey();
         Refresh();
-        StatusMessage = $"'{row.Name}' removed, its key retired and its tool grants dropped.";
+        StatusMessage = $"'{row.Name}' removed, its key retired, and its tool grants and Router route dropped.";
     });
 
     [RelayCommand]

@@ -86,14 +86,6 @@ public sealed class PermissionsStore : IWritablePermissions
             Grants = [.. c.Grants.Where(g => !string.Equals(g.UserId, userId, StringComparison.Ordinal))],
         });
 
-    /// <summary>Replaces every grant at once — for a migration or an archive import, which arrive with
-    /// the whole document rather than one change.</summary>
-    public void Replace(IReadOnlyList<PermissionsGrant> grants)
-    {
-        ArgumentNullException.ThrowIfNull(grants);
-        Update(c => c with { Grants = [.. grants] });
-    }
-
     private void Update(Func<PermissionsConfiguration, PermissionsConfiguration> change)
     {
         lock (_gate)

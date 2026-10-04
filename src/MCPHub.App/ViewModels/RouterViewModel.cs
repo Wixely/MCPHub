@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 
 namespace MCPHub.App.ViewModels;
 
@@ -38,30 +39,55 @@ public sealed partial class RouterOutputRow : ObservableObject
     partial void OnTestSummaryChanged(string value) => OnPropertyChanged(nameof(HasTestResult));
 }
 
-/// <summary>One saved agent, including when it last reached the Router.</summary>
+/// <summary>A user that may be given Router access, as the editor's dropdown offers it.</summary>
+public sealed record RouterUserChoice(string Id, string Name, bool Enabled)
+{
+    /// <summary>Shown in the list: a suspended user can hold a route, and it will do nothing until it is
+    /// enabled on the Users page, so the list says which it is rather than looking the same either way.</summary>
+    public string Label => Enabled ? Name : $"{Name} (suspended)";
+}
+
+/// <summary>
+/// One user with Router access: where its requests go, and when it last arrived.
+///
+/// <para>Its name and state are the user directory's, read at build time rather than stored here — a
+/// route names a user and nothing else, so this row is the only place the two are shown together.</para>
+/// </summary>
 public sealed partial class RouterInputRow : ObservableObject
 {
     [ObservableProperty] private string _activitySummary = string.Empty;
 
-    public RouterInputRow(RouterInput input, string routeSummary, IRelayCommand editCommand)
+    /// <summary>Live, because it is changed on another page: a user suspended on Users keeps its route
+    /// and stops working, and this row is where somebody looking at the Router would see that.</summary>
+    [ObservableProperty] private string _state = string.Empty;
+
+    [ObservableProperty] private string _name = string.Empty;
+
+    public RouterInputRow(RouterInput input, HubUser? user, string routeSummary, IRelayCommand editCommand)
     {
-        Id = input.Id;
-        Name = input.Name;
+        Id = input.UserId;
         RouteSummary = routeSummary;
-        State = input.Enabled ? "Enabled" : "Disabled";
         EditCommand = editCommand;
+        Describe(user);
     }
 
     public string Id { get; }
-    public string Name { get; }
     public string RouteSummary { get; }
-    public string State { get; }
     public IRelayCommand EditCommand { get; }
+
+    /// <summary>Re-reads the user behind this route. Null means the user is gone, which the Users page
+    /// prevents by dropping routes with the user — but an imported archive can still produce it.</summary>
+    public void Describe(HubUser? user)
+    {
+        Name = user?.Name is { Length: > 0 } name ? name : user is null ? "(user no longer exists)" : "(unnamed)";
+        State = user is null ? "Missing" : user.Enabled ? "Enabled" : "Suspended";
+    }
 }
 
 public sealed partial class RouterViewModel : ViewModelBase
 {
     private readonly RouterStore _store;
+    private readonly IUserDirectory _users;
     private readonly RouterHost _host;
     private readonly IRouterActivityLog _activity;
     private readonly IRouterOutputTester _tester;
@@ -82,11 +108,8 @@ public sealed partial class RouterViewModel : ViewModelBase
     [ObservableProperty] private string _outputApiKey = string.Empty;
     [ObservableProperty] private bool _clearOutputKey;
     [ObservableProperty] private RouterInput? _selectedInput;
-    [ObservableProperty] private string _inputName = string.Empty;
-    [ObservableProperty] private bool _inputEnabled = true;
+    [ObservableProperty] private RouterUserChoice? _inputUser;
     [ObservableProperty] private RouterChoice? _inputOutput;
-    [ObservableProperty] private string _generatedKey = string.Empty;
-    [ObservableProperty] private string _generatedKeyNotice = string.Empty;
     [ObservableProperty] private bool _isOutputEditorOpen;
     [ObservableProperty] private bool _isInputEditorOpen;
 
@@ -96,6 +119,9 @@ public sealed partial class RouterViewModel : ViewModelBase
     public ObservableCollection<RouterInputRow> InputRows { get; } = [];
     public ObservableCollection<RouterChoice> DefaultChoices { get; } = [];
     public ObservableCollection<RouterChoice> InputChoices { get; } = [];
+
+    /// <summary>Users that can be given access: everyone without a route, plus whoever is being edited.</summary>
+    public ObservableCollection<RouterUserChoice> UserChoices { get; } = [];
     public bool IsRunning => _host.IsRunning;
     public bool IsStopped => !IsRunning;
     public bool IsIdle => !IsBusy;
@@ -112,13 +138,29 @@ public sealed partial class RouterViewModel : ViewModelBase
     public bool HasConfigurationError => ConfigurationError is not null;
     public bool HasOutput => SelectedOutput is not null;
     public bool HasInput => SelectedInput is not null;
-    public bool HasGeneratedKey => GeneratedKey.Length > 0;
     public bool HasNoOutputs => Outputs.Count == 0;
     public bool HasNoInputs => Inputs.Count == 0;
     public string OutputEditorTitle => SelectedOutput is { } output ? $"Edit output: {output.Name}" : "Add model output";
-    public string InputEditorTitle => SelectedInput is { } input ? $"Edit agent: {input.Name}" : "Add agent";
+
+    public string InputEditorTitle => SelectedInput is { } input
+        ? $"Router access for {NameOf(input.UserId)}"
+        : "Give a user Router access";
+
     public string OutputSaveText => HasOutput ? "Save changes" : "Add output";
-    public string InputSaveText => HasInput ? "Save changes" : "Add agent and generate key";
+    public string InputSaveText => HasInput ? "Save changes" : "Grant access";
+
+    /// <summary>
+    /// Why the dropdown is empty, when it is. No key is issued here any more, so the only way to add a
+    /// caller is to pick one that exists — and a page offering an empty list with no explanation is the
+    /// kind of dead end that makes somebody think the feature is broken.
+    /// </summary>
+    public string? NoUsersHint => UserChoices.Count > 0
+        ? null
+        : _users.Snapshot.Users.Length == 0
+            ? "No users exist yet. Add one on the Users page; its key then works here and on the proxy."
+            : "Every user already has Router access. Edit one of the routes below, or add a user on the Users page.";
+
+    public bool HasNoUsersHint => NoUsersHint is not null;
     public string SavedDefaultSummary => DescribeDefault(_store.Snapshot);
 
     /// <summary>
@@ -162,9 +204,15 @@ public sealed partial class RouterViewModel : ViewModelBase
     }
     public string CredentialStatus => SelectedOutput?.ProtectedApiKey is not null ? "An upstream key is stored. Leave blank to keep it." : "No upstream key stored. Leave blank for an unauthenticated local model.";
 
-    public RouterViewModel(RouterStore store, RouterHost host, IRouterActivityLog activity, IRouterOutputTester tester)
+    public RouterViewModel(
+        RouterStore store,
+        IUserDirectory users,
+        RouterHost host,
+        IRouterActivityLog activity,
+        IRouterOutputTester tester)
     {
         _store = store;
+        _users = users;
         _host = host;
         _activity = activity;
         _tester = tester;
@@ -189,15 +237,22 @@ public sealed partial class RouterViewModel : ViewModelBase
         RefreshActivity();
     }
 
-    /// <summary>Re-reads each agent's last connection. Cheap enough to run on the page's one-second tick.</summary>
+    /// <summary>
+    /// Re-reads what each row shows that something else can change: its last connection, and the user
+    /// behind it. Cheap enough to run on the page's one-second tick, which is what keeps a user suspended
+    /// on the Users page from still reading "Enabled" here.
+    /// </summary>
     public void RefreshActivity()
     {
+        var users = _users.Snapshot.Users;
         foreach (var row in InputRows)
+        {
             row.ActivitySummary = DescribeActivity(_activity.Get(row.Id));
+            row.Describe(users.FirstOrDefault(u => string.Equals(u.Id, row.Id, StringComparison.Ordinal)));
+        }
     }
 
     partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(IsIdle));
-    partial void OnGeneratedKeyChanged(string value) => OnPropertyChanged(nameof(HasGeneratedKey));
     partial void OnBindAddressChanged(string value) => OnPropertyChanged(nameof(ListenerSummary));
     partial void OnPortChanged(int value) => OnPropertyChanged(nameof(ListenerSummary));
     partial void OnSelectedOutputChanged(RouterOutput? value)
@@ -214,9 +269,13 @@ public sealed partial class RouterViewModel : ViewModelBase
     }
     partial void OnSelectedInputChanged(RouterInput? value)
     {
-        InputName = value?.Name ?? string.Empty;
-        InputEnabled = value?.Enabled ?? true;
-        InputOutput = InputChoices.FirstOrDefault(o => o.Id == value?.OutputId);
+        // The user being edited is offered even though it already holds a route, since otherwise the
+        // dropdown would show somebody else's name against the route on screen.
+        RefreshUserChoices(value?.UserId);
+        InputUser = value is null
+            ? UserChoices.FirstOrDefault()
+            : UserChoices.FirstOrDefault(u => string.Equals(u.Id, value.UserId, StringComparison.Ordinal));
+        InputOutput = InputChoices.FirstOrDefault(o => o.Id == value?.OutputId) ?? InputChoices.FirstOrDefault();
         OnPropertyChanged(nameof(HasInput));
         OnPropertyChanged(nameof(InputEditorTitle));
         OnPropertyChanged(nameof(InputSaveText));
@@ -229,7 +288,7 @@ public sealed partial class RouterViewModel : ViewModelBase
     [RelayCommand] private void CancelInput() { IsInputEditorOpen = false; SelectedInput = null; OnSelectedInputChanged(null); }
     public void EditOutput(RouterOutput output) { SelectedOutput = output; OnSelectedOutputChanged(output); IsOutputEditorOpen = true; }
     public void EditInput(RouterInput input) { SelectedInput = input; OnSelectedInputChanged(input); IsInputEditorOpen = true; }
-    [RelayCommand] private void DismissKey() { GeneratedKey = string.Empty; GeneratedKeyNotice = string.Empty; }
+
 
     /// <summary>Sets the bind address box from a preset button, leaving the change unapplied until Apply.</summary>
     [RelayCommand]
@@ -315,50 +374,46 @@ public sealed partial class RouterViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
+    /// <summary>
+    /// Gives the chosen user Router access, or moves where its requests go. No key is issued and none is
+    /// shown: the user already holds one from the Users page, and that is the whole point — a second key
+    /// here is what used to make an agent carry two.
+    /// </summary>
     [RelayCommand]
     private void SaveInput() => Run(() =>
     {
         if (!IsInputEditorOpen) return;
-        var name = InputName.Trim();
-        if (SelectedInput is { } input)
+        if (InputUser is not { } user)
         {
-            _store.SaveInput(input.Id, InputName, InputOutput?.Id, InputEnabled);
-            CancelInput();
-            Refresh();
-            StatusMessage = $"Agent '{name}' updated. Route and access changes apply to new requests.";
+            StatusMessage = NoUsersHint ?? "Choose a user to give Router access to.";
+            return;
         }
-        else
-        {
-            var created = _store.AddInput(InputName, InputOutput?.Id);
-            CancelInput();
-            Refresh();
-            ShowKey(created.Key, name);
-            StatusMessage = $"Agent '{name}' added. Copy its key before dismissing it.";
-        }
-    });
 
-    [RelayCommand]
-    private void RotateKey() => Run(() =>
-    {
-        if (SelectedInput is not { } input) return;
-        var key = _store.RotateKey(input.Id);
-        // Keep unsaved name/route edits intact; rotation changes only the credential.
+        var editing = SelectedInput is not null;
+        _store.SetRoute(user.Id, InputOutput?.Id);
+        CancelInput();
         Refresh();
-        ShowKey(key, input.Name);
-        StatusMessage = "Key rotated. The previous key can no longer start requests.";
+        StatusMessage = editing
+            ? $"'{user.Name}' re-routed. The change applies to its next request."
+            : $"'{user.Name}' may now use the Router with the key it already holds.";
     });
 
+    /// <summary>
+    /// Takes Router access away and leaves the user alone — it keeps its key and whatever tools it is
+    /// granted, which is the distinction that did not exist while the Router issued its own keys.
+    /// </summary>
     [RelayCommand]
     private void RemoveInput() => Run(() =>
     {
         if (SelectedInput is not { } input) return;
-        _store.RemoveInput(input.Id);
-        // Drop the history too, so a future agent reusing the id cannot inherit someone else's activity.
-        _activity.Forget(input.Id);
+        var name = NameOf(input.UserId);
+        _store.RemoveRoute(input.UserId);
+        // Drop the history too, so a user given access again later starts with a clean record rather than
+        // appearing to have connected under an arrangement that has since been revoked.
+        _activity.Forget(input.UserId);
         CancelInput();
-        DismissKey();
         Refresh();
-        StatusMessage = "Input removed. Its key can no longer start requests.";
+        StatusMessage = $"'{name}' can no longer use the Router. Its key still works wherever else it is granted.";
     });
 
     [RelayCommand]
@@ -417,11 +472,6 @@ public sealed partial class RouterViewModel : ViewModelBase
         finally { IsBusy = false; RefreshHostState(); }
     }
 
-    private void ShowKey(string key, string name)
-    {
-        GeneratedKey = key;
-        GeneratedKeyNotice = $"New key for {name}. Copy it now; it cannot be recovered after dismissal.";
-    }
     private void Run(Action action)
     {
         try { action(); }
@@ -483,13 +533,17 @@ public sealed partial class RouterViewModel : ViewModelBase
             DefaultChoices.Add(new(output.Id, output.Name));
             InputChoices.Add(new(output.Id, output.Name));
         }
-        foreach (var input in config.Inputs.OrderBy(i => i.Name))
+        var users = _users.Snapshot.Users;
+        foreach (var input in config.Inputs.OrderBy(i => NameOf(i.UserId), StringComparer.CurrentCultureIgnoreCase))
         {
             Inputs.Add(input);
             var output = config.Outputs.FirstOrDefault(o => o.Id == (input.OutputId ?? config.DefaultOutputId));
             var route = output is null ? "No destination assigned" : input.OutputId is null ? $"Global default → {output.Name}" : $"Assigned output → {output.Name}";
-            InputRows.Add(new(input, route, new RelayCommand(() => EditInput(input))));
+            var user = users.FirstOrDefault(u => string.Equals(u.Id, input.UserId, StringComparison.Ordinal));
+            InputRows.Add(new(input, user, route, new RelayCommand(() => EditInput(input))));
         }
+
+        RefreshUserChoices(SelectedInput?.UserId);
         DefaultOutput = DefaultChoices.First(o => o.Id == config.DefaultOutputId);
         InputOutput = InputChoices.FirstOrDefault(o => o.Id == draftRouteId) ?? InputChoices[0];
         RefreshActivity();
@@ -500,4 +554,32 @@ public sealed partial class RouterViewModel : ViewModelBase
         OnPropertyChanged(nameof(RejectionSummary));
         OnPropertyChanged(nameof(HasRejections));
     }
+
+    /// <summary>
+    /// Rebuilds the editor's user list: everyone without a route, plus <paramref name="include"/> so the
+    /// route being edited still shows its own user.
+    /// </summary>
+    private void RefreshUserChoices(string? include)
+    {
+        var routed = _store.Snapshot.Inputs.Select(i => i.UserId).ToHashSet(StringComparer.Ordinal);
+        var chosen = InputUser?.Id;
+        UserChoices.Clear();
+        foreach (var user in _users.Snapshot.Users.OrderBy(u => u.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            if (!routed.Contains(user.Id) || string.Equals(user.Id, include, StringComparison.Ordinal))
+                UserChoices.Add(new(user.Id, user.Name.Length > 0 ? user.Name : "(unnamed)", user.Enabled));
+        }
+
+        InputUser = UserChoices.FirstOrDefault(u => string.Equals(u.Id, chosen ?? include, StringComparison.Ordinal))
+                    ?? UserChoices.FirstOrDefault();
+        OnPropertyChanged(nameof(NoUsersHint));
+        OnPropertyChanged(nameof(HasNoUsersHint));
+    }
+
+    /// <summary>A routed user's name, or something honest when the user has been deleted out from under
+    /// the route — which the Users page drops routes to avoid, but an imported archive can still produce.</summary>
+    private string NameOf(string userId) =>
+        _users.Snapshot.Users.FirstOrDefault(u => string.Equals(u.Id, userId, StringComparison.Ordinal)) is { } user
+            ? user.Name.Length > 0 ? user.Name : "(unnamed)"
+            : "(user no longer exists)";
 }

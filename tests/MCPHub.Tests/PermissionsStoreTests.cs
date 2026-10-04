@@ -87,18 +87,6 @@ public sealed class PermissionsStoreTests : IDisposable
         Assert.Single(store.Snapshot.Grants);
     }
 
-    [Fact]
-    public void Replacing_every_grant_at_once_is_how_a_migration_arrives()
-    {
-        var store = Store();
-        store.SetGrants("alice", ["kodi__*"]);
-
-        store.Replace([new PermissionsGrant { UserId = "imported", Tools = ["*"] }]);
-
-        Assert.Null(store.GrantsFor("alice"));
-        Assert.Equal(["*"], store.GrantsFor("imported")!.Tools);
-    }
-
     // ---- persistence ---------------------------------------------------------------------------
 
     [Fact]

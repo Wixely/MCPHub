@@ -7,6 +7,7 @@ using MCPHub.Core.Models;
 using MCPHub.Core.Recipes;
 using MCPHub.Core.Routing;
 using MCPHub.Core.Settings;
+using MCPHub.Core.Users;
 using Microsoft.Extensions.Logging;
 
 namespace MCPHub.Core.Backup;
@@ -65,6 +66,7 @@ public sealed class SettingsArchiveService : ISettingsArchiveService
     private readonly ISecretStore _secrets;
     private readonly IRecipeStore _recipes;
     private readonly RouterStore _router;
+    private readonly UserStore _users;
     private readonly ILogger<SettingsArchiveService> _logger;
 
     public SettingsArchiveService(
@@ -72,12 +74,14 @@ public sealed class SettingsArchiveService : ISettingsArchiveService
         ISecretStore secrets,
         IRecipeStore recipes,
         RouterStore router,
+        UserStore users,
         ILogger<SettingsArchiveService> logger)
     {
         _settings = settings;
         _secrets = secrets;
         _recipes = recipes;
         _router = router;
+        _users = users;
         _logger = logger;
     }
 
@@ -188,6 +192,10 @@ public sealed class SettingsArchiveService : ISettingsArchiveService
             {
                 Recipes = [.. _recipes.All],
             }, SettingsArchiveJsonContext.Default.RecipesSection),
+
+            SettingsCategory.Users => Serialize(
+                new UsersSection { Users = [.. _users.Snapshot.Users] },
+                SettingsArchiveJsonContext.Default.UsersSection),
 
             SettingsCategory.Router => Serialize(BuildRouterSection(), SettingsArchiveJsonContext.Default.RouterSection),
 
@@ -394,11 +402,21 @@ public sealed class SettingsArchiveService : ISettingsArchiveService
                 break;
             }
 
+            case SettingsCategory.Users:
+            {
+                var section = Deserialize(json, SettingsArchiveJsonContext.Default.UsersSection);
+                var (added, updated) = _users.Merge(section.Users);
+                notes.Add(
+                    $"Users merged: {added} added, {updated} updated. Local users not in the archive were kept, "
+                    + "and every imported key works as it did on the machine the archive came from.");
+                break;
+            }
+
             case SettingsCategory.Router:
             {
                 var section = Deserialize(json, SettingsArchiveJsonContext.Default.RouterSection);
                 context.Router = section;
-                notes.Add($"Router: {section.Outputs.Count} output(s) and {section.Inputs.Count} agent(s) staged.");
+                notes.Add($"Router: {section.Outputs.Count} output(s) and {section.Inputs.Count} route(s) staged.");
                 break;
             }
 
@@ -461,6 +479,15 @@ public sealed class SettingsArchiveService : ISettingsArchiveService
             notes.Add(keys is null || missing > 0
                 ? $"Router routes applied. {missing} output(s) arrived without an upstream key — re-enter those keys, or export again with the Secrets category and a password."
                 : "Router routes and upstream keys applied.");
+
+            // A route names a user, so an archive carrying routes without the Users category applies
+            // routes nobody can use. Reported rather than refused: the destination may already hold those
+            // users, and this is the only place that can tell the difference.
+            var known = _users.Snapshot.Users.Select(u => u.Id).ToHashSet(StringComparer.Ordinal);
+            var orphaned = section.Inputs.Count(i => !known.Contains(i.UserId));
+            if (orphaned > 0)
+                notes.Add($"{orphaned} route(s) name users this hub does not have. Import the archive's Users "
+                    + "category as well, or add those users on the Users page — until then their keys are refused.");
             restart.Add("router listener address and port (use Apply on the Router page to rebind now)");
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)

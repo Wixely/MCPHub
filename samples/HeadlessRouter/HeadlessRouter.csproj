@@ -8,5 +8,6 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
     <None Update="router.example.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="users.example.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

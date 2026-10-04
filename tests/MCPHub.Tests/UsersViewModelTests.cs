@@ -1,5 +1,6 @@
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Permissions;
+using MCPHub.Core.Routing;
 using MCPHub.Core.Settings;
 using MCPHub.Core.Users;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +25,11 @@ public sealed class UsersViewModelTests : IDisposable
     public void Dispose() => _dir.Dispose();
 
     private sealed record Fixture(
-        UsersViewModel Vm, UserStore Users, PermissionsStore Permissions, SettingsStore Settings);
+        UsersViewModel Vm,
+        UserStore Users,
+        PermissionsStore Permissions,
+        RouterStore Router,
+        SettingsStore Settings);
 
     private Fixture Build(params (string Variable, string Value)[] environment)
     {
@@ -35,7 +40,13 @@ public sealed class UsersViewModelTests : IDisposable
         var settings = new SettingsStore(paths, NullLogger<SettingsStore>.Instance);
         var administration = new AdministrationPolicy(settings, name => map.GetValueOrDefault(name));
 
-        return new Fixture(new UsersViewModel(users, permissions, settings, administration), users, permissions, settings);
+        var router = new RouterStore(paths, users);
+        return new Fixture(
+            new UsersViewModel(users, permissions, [permissions, router], settings, administration),
+            users,
+            permissions,
+            router,
+            settings);
     }
 
     // ---- adding and editing --------------------------------------------------------------------
@@ -160,6 +171,28 @@ public sealed class UsersViewModelTests : IDisposable
         Assert.Null(reloaded.Users.Resolve(issued.Key));
         Assert.Empty(reloaded.Permissions.Snapshot.Grants);
         Assert.False(reloaded.Vm.IsEditorOpen);
+    }
+
+    /// <summary>
+    /// Removal has to reach everything keyed to the user, not just grants: a Router route naming an id
+    /// nobody holds shows as "(user no longer exists)" on that page and would be inherited by whoever
+    /// happened to be created with the same id next.
+    /// </summary>
+    [Fact]
+    public void Removing_a_user_drops_its_router_route_as_well_as_its_grants()
+    {
+        var f = Build();
+        var issued = f.Users.Create("agent");
+        f.Permissions.SetGrants(issued.User.Id, ["*"]);
+        f.Router.SetRoute(issued.User.Id, null);
+        var reloaded = Build();
+        reloaded.Vm.SelectedUser = reloaded.Vm.Users.Single();
+
+        reloaded.Vm.RemoveCommand.Execute(null);
+
+        Assert.Empty(reloaded.Permissions.Snapshot.Grants);
+        Assert.Empty(reloaded.Router.Snapshot.Inputs);
+        Assert.Null(reloaded.Router.Resolve(issued.Key));
     }
 
     // ---- not misleading the operator -----------------------------------------------------------

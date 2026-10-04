@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -26,15 +27,15 @@ public sealed class RouterTests
         Assert.False(store.Snapshot.StartOnLaunch);
         var first = store.SaveOutput(null, "First", "http://localhost:8000/v1", "model-one", "test-output-key");
         var second = store.SaveOutput(null, "Second", "http://localhost:8001/v1", null, null);
-        var shared = store.AddInput("Default agent", null);
-        var pinned = store.AddInput("Pinned agent", first);
+        var shared = fixture.AddAgent("Default agent");
+        var pinned = fixture.AddAgent("Pinned agent", first);
         store.SetDefault(first);
         Assert.Equal(first, store.Resolve(shared.Key)!.Output!.Id);
         store.SetDefault(second);
         Assert.Equal(second, store.Resolve(shared.Key)!.Output!.Id);
         Assert.Equal(first, store.Resolve(pinned.Key)!.Output!.Id);
         store.Configure("0.0.0.0", 5805, true);
-        var reloaded = new RouterStore(fixture);
+        var reloaded = new RouterStore(fixture, fixture.Users);
         Assert.True(reloaded.Snapshot.StartOnLaunch);
         Assert.Equal(5805, reloaded.Snapshot.Port);
         Assert.Equal("0.0.0.0", reloaded.Snapshot.BindAddress);
@@ -50,18 +51,18 @@ public sealed class RouterTests
     public void Keys_are_unique_rotatable_revocable_and_not_recoverable_from_snapshots()
     {
         using var f = new StoreFixture();
-        var one = f.Store.AddInput("One", null);
-        var two = f.Store.AddInput("Two", null);
+        var one = f.AddAgent("One", null);
+        var two = f.AddAgent("Two", null);
         Assert.NotEqual(one.Key, two.Key);
         Assert.Null(f.Store.Resolve("invalid-key-that-does-not-exist"));
-        var rotated = f.Store.RotateKey(one.Id);
+        var rotated = f.Users.RotateKey(one.Id);
         Assert.Null(f.Store.Resolve(one.Key));
         Assert.NotNull(f.Store.Resolve(rotated));
-        f.Store.SaveInput(one.Id, "One", null, false);
+        f.Users.SetEnabled(one.Id, false);
         Assert.Null(f.Store.Resolve(rotated));
-        f.Store.SaveInput(one.Id, "One", null, true);
+        f.Users.SetEnabled(one.Id, true);
         Assert.NotNull(f.Store.Resolve(rotated));
-        f.Store.RemoveInput(one.Id);
+        f.Users.Delete(one.Id);
         Assert.Null(f.Store.Resolve(rotated));
         Assert.NotNull(f.Store.Resolve(two.Key));
     }
@@ -76,9 +77,10 @@ public sealed class RouterTests
         f.Store.SetDefault(id);
         Assert.Throws<ArgumentException>(() => f.Store.RemoveOutput(id));
         f.Store.SetDefault(null);
-        var input = f.Store.AddInput("Agent", id);
+        var input = f.AddAgent("Agent", id);
         Assert.Throws<ArgumentException>(() => f.Store.RemoveOutput(id));
-        f.Store.SaveInput(input.Id, "Agent", null, true);
+        // Moved off this output, which is what has to happen before it can go.
+        f.Store.SetRoute(input.Id, null);
         f.Store.SaveOutput(id, "Output", "http://localhost:8001/v1", null, "");
         Assert.Null(RouterStore.ReadApiKey(Assert.Single(f.Store.Snapshot.Outputs)));
         f.Store.RemoveOutput(id);
@@ -102,16 +104,16 @@ public sealed class RouterTests
     public void Failed_save_does_not_publish_new_routes()
     {
         using var f = new StoreFixture();
-        var input = f.Store.AddInput("Keep", null);
+        var input = f.AddAgent("Keep", null);
         var path = Path.Combine(f.SettingsDirectory, "router.json");
         File.Move(path, path + ".backup");
         Directory.CreateDirectory(path);
-        var error = Record.Exception(() => f.Store.RemoveInput(input.Id));
+        var error = Record.Exception(() => f.Store.RemoveRoute(input.Id));
         Assert.True(error is IOException or UnauthorizedAccessException);
         Directory.Delete(path);
         File.Move(path + ".backup", path);
         Assert.NotNull(f.Store.Resolve(input.Key));
-        Assert.NotNull(new RouterStore(f).Resolve(input.Key));
+        Assert.NotNull(new RouterStore(f, f.Users).Resolve(input.Key));
         Assert.Empty(Directory.GetFiles(f.SettingsDirectory, "*.tmp"));
     }
 
@@ -120,9 +122,9 @@ public sealed class RouterTests
     {
         using var f = new StoreFixture();
         File.WriteAllText(Path.Combine(f.SettingsDirectory, "router.json"), "not-json");
-        var store = new RouterStore(f);
+        var store = new RouterStore(f, f.Users);
         Assert.NotNull(store.LoadError);
-        Assert.Throws<InvalidOperationException>(() => store.AddInput("Agent", null));
+        Assert.Throws<InvalidOperationException>(() => store.SetRoute(f.Users.Create("Agent").User.Id, null));
         Assert.Equal("not-json", File.ReadAllText(Path.Combine(f.SettingsDirectory, "router.json")));
     }
 
@@ -134,7 +136,7 @@ public sealed class RouterTests
         await using var upstream = await MockServer.Start(async c => { Interlocked.Increment(ref calls); await c.Response.WriteAsync("{}"); });
         var id = f.Store.SaveOutput(null, "Mock", upstream.Url + "/v1", null, null);
         f.Store.SetDefault(id);
-        var input = f.Store.AddInput("Agent", null);
+        var input = f.AddAgent("Agent", null);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router);
         using var missing = await client.GetAsync("models");
@@ -145,7 +147,7 @@ public sealed class RouterTests
             using var response = await client.GetAsync(path);
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
-        f.Store.SaveInput(input.Id, "Agent", null, false);
+        f.Users.SetEnabled(input.Id, false);
         using var disabled = await client.GetAsync("models");
         Assert.Equal(HttpStatusCode.Unauthorized, disabled.StatusCode);
         Assert.Equal(0, calls);
@@ -177,7 +179,7 @@ public sealed class RouterTests
             await c.Response.WriteAsync("{\"error\":{\"message\":\"rate limited\"}}");
         });
         var output = f.Store.SaveOutput(null, "Mock", upstream.Url + "/api/v1", "override-model", "provider-secret");
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         client.DefaultRequestHeaders.Add("Cookie", "agent=private");
@@ -207,8 +209,8 @@ public sealed class RouterTests
         var a = f.Store.SaveOutput(null, "One", one.Url + "/v1", null, null);
         var b = f.Store.SaveOutput(null, "Two", two.Url + "/v1", null, null);
         f.Store.SetDefault(a);
-        var input = f.Store.AddInput("Default", null);
-        var pinned = f.Store.AddInput("Pinned", a);
+        var input = f.AddAgent("Default", null);
+        var pinned = f.AddAgent("Pinned", a);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var pinnedClient = Client(router, pinned.Key);
@@ -216,9 +218,9 @@ public sealed class RouterTests
         f.Store.SetDefault(b);
         Assert.Equal("two", await client.GetStringAsync("models"));
         Assert.Equal("one", await pinnedClient.GetStringAsync("models"));
-        f.Store.SaveInput(pinned.Id, "Pinned", b, true);
+        f.Store.SetRoute(pinned.Id, b);
         Assert.Equal("two", await pinnedClient.GetStringAsync("models"));
-        f.Store.RotateKey(input.Id);
+        f.Users.RotateKey(input.Id);
         using var revoked = await client.GetAsync("models");
         Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
     }
@@ -238,7 +240,7 @@ public sealed class RouterTests
         });
         var output = f.Store.SaveOutput(null, "Stream", upstream.Url + "/v1", null, null);
         f.Store.SetDefault(output);
-        var input = f.Store.AddInput("Agent", null);
+        var input = f.AddAgent("Agent", null);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions") { Content = Json("{\"model\":\"local\",\"stream\":true}") };
@@ -271,7 +273,7 @@ public sealed class RouterTests
             catch (OperationCanceledException) { cancelled.TrySetResult(); }
         });
         var output = f.Store.SaveOutput(null, "Stream", upstream.Url + "/v1", null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -295,7 +297,7 @@ public sealed class RouterTests
             return Task.CompletedTask;
         });
         var output = f.Store.SaveOutput(null, "Redirect", upstream.Url + "/v1", null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var response = await client.GetAsync("models");
@@ -314,7 +316,7 @@ public sealed class RouterTests
     {
         using var f = new StoreFixture();
         var output = f.Store.SaveOutput(null, "Unused", "http://localhost:1/v1", null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var response = await client.PostAsync("responses", new StringContent(body, Encoding.UTF8, mediaType));
@@ -326,7 +328,7 @@ public sealed class RouterTests
     {
         using var f = new StoreFixture();
         var output = f.Store.SaveOutput(null, "Unused", "http://localhost:1/v1", null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         client.DefaultRequestHeaders.ExpectContinue = true;
@@ -344,7 +346,7 @@ public sealed class RouterTests
         using var f = new StoreFixture();
         await using var router = await StartRouter(f.Store);
         var output = f.Store.SaveOutput(null, "Loop", router.EndpointUrl, null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         using var client = Client(router, input.Key);
         using var response = await client.GetAsync("models");
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
@@ -363,7 +365,7 @@ public sealed class RouterTests
             await c.Response.WriteAsync("{}");
         });
         var output = f.Store.SaveOutput(null, "Mock", upstream.Url + "/v1", null, null);
-        var input = f.Store.AddInput("Agent", output);
+        var input = f.AddAgent("Agent", output);
         await using var router = await StartRouter(f.Store);
         using var client = Client(router, input.Key);
         using var response = await client.PostAsync("chat/completions", Json(original));
@@ -413,7 +415,26 @@ public sealed class RouterTests
         public string DefaultServersDirectory => SettingsDirectory;
         public string EnsureDirectory(string path) { Directory.CreateDirectory(path); return path; }
         public RouterStore Store { get; }
-        public StoreFixture() { Directory.CreateDirectory(SettingsDirectory); Store = new(this); }
+        public UserStore Users { get; }
+
+        public StoreFixture()
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            Users = new(this);
+            Store = new(this, Users);
+        }
+
+        /// <summary>
+        /// A caller that may use the Router: a user with a key, plus a route for it. Two steps now rather
+        /// than one, which is the change — the key belongs to the user and the Router only says where its
+        /// requests go.
+        /// </summary>
+        public (string Id, string Key) AddAgent(string name, string? outputId = null)
+        {
+            var (user, key) = Users.Create(name);
+            Store.SetRoute(user.Id, outputId);
+            return (user.Id, key);
+        }
         public void Dispose() => Directory.Delete(SettingsDirectory, recursive: true);
     }
     private sealed class MockServer(WebApplication app, string url) : IAsyncDisposable

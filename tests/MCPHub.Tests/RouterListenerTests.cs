@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -24,7 +25,7 @@ public sealed class RouterListenerTests
         Assert.Equal("127.0.0.1", fixture.Store.Snapshot.BindAddress);
 
         fixture.Store.Configure("0.0.0.0", 5801, false);
-        Assert.Equal("0.0.0.0", new RouterStore(fixture).Snapshot.BindAddress);
+        Assert.Equal("0.0.0.0", new RouterStore(fixture, fixture.Users).Snapshot.BindAddress);
 
         // A host name would have to be resolved, and which answer it binds would be silently arbitrary.
         Assert.Throws<ArgumentException>(() => fixture.Store.Configure("localhost", 5801, false));
@@ -46,7 +47,7 @@ public sealed class RouterListenerTests
         using var fixture = new RouterFixture();
         File.WriteAllText(Path.Combine(fixture.SettingsDirectory, "router.json"), json);
 
-        var store = new RouterStore(fixture);
+        var store = new RouterStore(fixture, fixture.Users);
 
         // Losing an entire routing table to a field that did not exist when the file was written is the
         // worst possible reading of a missing value.
@@ -71,16 +72,18 @@ public sealed class RouterListenerTests
             }
             """);
 
-        var store = new RouterStore(fixture);
+        var store = new RouterStore(fixture, fixture.Users);
 
         Assert.Null(store.LoadError);
         Assert.Equal("Existing", Assert.Single(store.Snapshot.Outputs).Name);
 
         // A load error would have made every subsequent write throw, which is what "the buttons do nothing"
-        // looks like from the Router page.
-        var agent = store.AddInput("Agent", null);
-        Assert.NotNull(store.Resolve(agent.Key));
-        Assert.Equal("127.0.0.1", new RouterStore(fixture).Snapshot.BindAddress);
+        // looks like from the Router page. Written through this store rather than the fixture's, since
+        // they are two readers of one file and only this one is under test.
+        var (user, key) = fixture.Users.Create("Agent");
+        store.SetRoute(user.Id, null);
+        Assert.NotNull(store.Resolve(key));
+        Assert.Equal("127.0.0.1", new RouterStore(fixture, fixture.Users).Snapshot.BindAddress);
     }
 
     [Fact]
@@ -102,7 +105,7 @@ public sealed class RouterListenerTests
         await using var upstream = await MockUpstream.StartAsync();
         var output = fixture.Store.SaveOutput(null, "Mock", upstream.Url, null, null);
         fixture.Store.SetDefault(output);
-        var agent = fixture.Store.AddInput("Agent", null);
+        var agent = fixture.AddAgent("Agent", null);
 
         await using var host = NewHost(fixture);
         await host.StartAsync(portOverride: 0);
@@ -198,13 +201,23 @@ public sealed class RouterListenerTests
         public string DefaultServersDirectory => SettingsDirectory;
         public string EnsureDirectory(string path) { Directory.CreateDirectory(path); return path; }
         public RouterStore Store { get; }
+        public UserStore Users { get; }
         public RouterActivityLog Activity { get; }
 
         public RouterFixture()
         {
             Directory.CreateDirectory(SettingsDirectory);
-            Store = new(this);
+            Users = new(this);
+            Store = new(this, Users);
             Activity = new(this, writeInterval: TimeSpan.Zero);
+        }
+
+        /// <summary>A caller that may use the Router: a user with a key, and a route for it.</summary>
+        public (string Id, string Key) AddAgent(string name, string? outputId = null)
+        {
+            var (user, key) = Users.Create(name);
+            Store.SetRoute(user.Id, outputId);
+            return (user.Id, key);
         }
 
         public void Dispose()

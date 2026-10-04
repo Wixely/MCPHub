@@ -66,6 +66,15 @@ public sealed class UserStore : IWritableUsers
         return (user, key);
     }
 
+    public void Adopt(HubUser user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+
+        // Validation is the Update path's, so an id or a hash already in the directory is refused here
+        // rather than producing a second entry that resolution would pick between arbitrarily.
+        Update(c => c with { Users = [.. c.Users, user with { Name = user.Name?.Trim() ?? string.Empty }] });
+    }
+
     public string RotateKey(string id)
     {
         var key = UserKeys.New();
@@ -88,13 +97,44 @@ public sealed class UserStore : IWritableUsers
         });
 
     /// <summary>
-    /// Replaces the stored set wholesale — for a migration or an archive import, which arrive with the
-    /// whole document rather than one change.
+    /// Folds an imported set into the stored one and reports what changed.
+    ///
+    /// <para>Merged rather than replaced, and the asymmetry is deliberate: a user the archive carries is
+    /// taken as written, because the archive is where the routes and grants referring to it came from,
+    /// but a local user the archive has never heard of is left alone. Replacing wholesale would retire
+    /// the key of every caller that happened not to be on the machine the archive came from.</para>
     /// </summary>
-    public void Replace(IReadOnlyList<HubUser> users)
+    public (int Added, int Updated) Merge(IReadOnlyList<HubUser> users)
     {
         ArgumentNullException.ThrowIfNull(users);
-        Update(c => c with { Users = [.. users] });
+
+        var added = 0;
+        var updated = 0;
+        Update(c =>
+        {
+            added = 0;
+            updated = 0;
+            var next = c.Users.ToList();
+            foreach (var incoming in users)
+            {
+                if (incoming is null || string.IsNullOrWhiteSpace(incoming.Id)) continue;
+                var at = next.FindIndex(u => string.Equals(u.Id, incoming.Id, StringComparison.Ordinal));
+                if (at >= 0)
+                {
+                    next[at] = incoming;
+                    updated++;
+                }
+                else
+                {
+                    next.Add(incoming);
+                    added++;
+                }
+            }
+
+            return c with { Users = [.. next] };
+        });
+
+        return (added, updated);
     }
 
     /// <summary>Rebuilds the list with one user changed, refusing an id that is not there rather than

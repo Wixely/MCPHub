@@ -10,7 +10,7 @@ RUN dotnet publish samples/HeadlessRouter/HeadlessRouter.csproj -c Release -o /o
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /out/ ./
-ENV MCPHUB_ROUTER_BIND=0.0.0.0 MCPHUB_ROUTER_CONFIG=/config/router.json
+ENV MCPHUB_ROUTER_BIND=0.0.0.0 MCPHUB_ROUTER_CONFIG=/config/router.json MCPHUB_USERS_CONFIG=/config/users.json
 USER $APP_UID
 EXPOSE 5801
 ENTRYPOINT ["dotnet", "HeadlessRouter.dll"]

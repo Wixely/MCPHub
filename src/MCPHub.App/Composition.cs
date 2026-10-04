@@ -99,6 +99,11 @@ public static class Composition
         services.AddSingleton<PermissionsStore>();
         services.AddSingleton<IPermissionsConfigurationSource>(sp => sp.GetRequiredService<PermissionsStore>());
         services.AddSingleton<IWritablePermissions>(sp => sp.GetRequiredService<PermissionsStore>());
+
+        // Everything keyed to a user, so deleting one leaves no grant and no route behind naming an id
+        // nobody holds. Each layer drops its own entry; identity never reaches into either.
+        services.AddSingleton<IUserDependent>(sp => sp.GetRequiredService<PermissionsStore>());
+        services.AddSingleton<IUserDependent>(sp => sp.GetRequiredService<RouterStore>());
         services.AddSingleton<PermissionsToolAuthorization>();
 
         // One switch for both administration surfaces, off by default: they govern every other tool, so
@@ -121,7 +126,7 @@ public static class Composition
         services.AddSingleton<IToolAuthorization>(sp => sp.GetRequiredService<CompositeToolAuthorization>());
         services.AddSingleton<ILocalToolProvider>(sp => new UserToolProvider(
             sp.GetRequiredService<IUserDirectory>(),
-            sp.GetRequiredService<IWritablePermissions>(),
+            sp.GetServices<IUserDependent>(),
             sp.GetRequiredService<ILogger<UserToolProvider>>()));
         services.AddSingleton<ILocalToolProvider>(sp => new PermissionsToolProvider(
             sp.GetRequiredService<IUserDirectory>(),

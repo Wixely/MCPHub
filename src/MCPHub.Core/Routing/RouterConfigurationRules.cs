@@ -23,8 +23,7 @@ public static class RouterConfigurationRules
             throw new ArgumentException("Router supports up to 256 inputs and outputs.");
         if (c.Inputs.Any(i => i is null) || c.Outputs.Any(o => o is null)) throw new ArgumentException("Invalid router entries.");
         var ids = c.Outputs.Select(o => o.Id).ToHashSet(StringComparer.Ordinal);
-        if (ids.Count != c.Outputs.Length || c.Inputs.Select(i => i.Id).Distinct().Count() != c.Inputs.Length)
-            throw new ArgumentException("Router IDs must be unique.");
+        if (ids.Count != c.Outputs.Length) throw new ArgumentException("Router IDs must be unique.");
         if (c.DefaultOutputId is not null && !ids.Contains(c.DefaultOutputId)) throw new ArgumentException("Choose an existing default output.");
         foreach (var o in c.Outputs)
         {
@@ -35,13 +34,14 @@ public static class RouterConfigurationRules
         }
         foreach (var i in c.Inputs)
         {
-            ValidateName(i.Name);
-            if (string.IsNullOrWhiteSpace(i.Id) || i.KeyHash is null || i.KeyHash.Length != 64 || !i.KeyHash.All(Uri.IsHexDigit))
-                throw new ArgumentException("Invalid input key hash.");
+            // No name and no key hash: an input names a user, and the user directory owns the rest. A
+            // stored document that still carries them is migrated before it gets here.
+            if (string.IsNullOrWhiteSpace(i.UserId)) throw new ArgumentException("Every router input must name a user.");
             if (i.OutputId is not null && !ids.Contains(i.OutputId)) throw new ArgumentException("Choose an existing output or the global default.");
         }
-        if (c.Inputs.Select(i => i.KeyHash).Distinct(StringComparer.OrdinalIgnoreCase).Count() != c.Inputs.Length)
-            throw new ArgumentException("Each input must have a unique key.");
+        // One input per user, so resolution never has to pick between two routes for one caller.
+        if (c.Inputs.Select(i => i.UserId).Distinct(StringComparer.Ordinal).Count() != c.Inputs.Length)
+            throw new ArgumentException("Each user may have only one router input.");
     }
 
     public static string NormalizeBaseUrl(string value)

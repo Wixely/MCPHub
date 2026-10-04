@@ -15,9 +15,10 @@ namespace MCPHub.Core.Users;
 /// is the point: one user, one key, usable on the Router and the proxy alike, with each surface
 /// keeping its own idea of what that user is allowed.</para>
 ///
-/// <para>Deleting a user also drops its tool grants, because a grant whose user has gone is an entry
-/// nobody can explain. That is done through the permissions store rather than by identity reaching
-/// into it, so neither layer has to know the other's shape.</para>
+/// <para>Deleting a user also drops whatever is keyed to it — its tool grants, its Router route —
+/// because an entry naming an id nobody holds is at best confusing and at worst inherited by whoever is
+/// created next. Each of those layers drops its own entry through <see cref="IUserDependent"/> rather
+/// than identity reaching into it, so neither has to know the other's shape.</para>
 /// </summary>
 public sealed class UserToolProvider : ILocalToolProvider
 {
@@ -111,19 +112,21 @@ public sealed class UserToolProvider : ILocalToolProvider
     ];
 
     private readonly IUserDirectory _users;
-    private readonly IWritablePermissions? _permissions;
+    private readonly IReadOnlyList<IUserDependent> _dependents;
     private readonly ILogger<UserToolProvider> _logger;
 
-    /// <param name="permissions">So that deleting a user drops its grants too. Optional, and null means
-    /// a hub whose grants are mounted read-only: the user still goes, and its now-inert grant entry is
-    /// reported by permissions__list_grants rather than silently left looking live.</param>
+    /// <param name="dependents">Everything keyed to a user, so deleting one leaves nothing behind. May
+    /// be empty, which is what a hub whose grants and routes are mounted read-only looks like: the user
+    /// still goes, and its now-inert entries are reported by the tools that list them rather than
+    /// silently left looking live.</param>
     public UserToolProvider(
-        IUserDirectory users, IWritablePermissions? permissions, ILogger<UserToolProvider> logger)
+        IUserDirectory users, IEnumerable<IUserDependent> dependents, ILogger<UserToolProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(users);
+        ArgumentNullException.ThrowIfNull(dependents);
         ArgumentNullException.ThrowIfNull(logger);
         _users = users;
-        _permissions = permissions;
+        _dependents = [.. dependents];
         _logger = logger;
     }
 
@@ -244,12 +247,31 @@ public sealed class UserToolProvider : ILocalToolProvider
         var user = Find(Text(arguments, "user"));
         store.Delete(user.Id);
 
-        // Grants go with it. Done after the user is gone, so a failure here leaves an inert grant
-        // rather than a live key with no owner.
-        _permissions?.ForgetUser(user.Id);
+        // Grants and routes go with it, after the user is gone — so a failure here leaves an inert entry
+        // rather than a live key with no owner. Each is tried on its own: one layer refusing must not
+        // leave the others holding something for a caller that no longer exists.
+        var stranded = 0;
+        foreach (var dependent in _dependents)
+        {
+            try
+            {
+                dependent.ForgetUser(user.Id);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException)
+            {
+                stranded++;
+                _logger.LogWarning(ex, "Could not drop {Layer} for the deleted user.", dependent.GetType().Name);
+            }
+        }
 
         return Json(
-            new UserChange { Message = $"'{user.Name}' is gone, its key is retired and its grants are dropped." },
+            new UserChange
+            {
+                Message = stranded == 0
+                    ? $"'{user.Name}' is gone, its key is retired and its grants and routes are dropped."
+                    : $"'{user.Name}' is gone and its key is retired, but {stranded} of its entries could "
+                      + "not be dropped — check the permissions and router documents for entries naming it.",
+            },
             UserResultsJsonContext.Default.UserChange);
     }
 

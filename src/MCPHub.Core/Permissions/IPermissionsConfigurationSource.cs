@@ -15,7 +15,7 @@ public interface IPermissionsConfigurationSource
 
 /// <summary>Changing it. Separate so a deployment whose policy is a mounted file can refuse edits by
 /// name rather than appear to accept them.</summary>
-public interface IWritablePermissions : IPermissionsConfigurationSource
+public interface IWritablePermissions : IPermissionsConfigurationSource, Users.IUserDependent
 {
     /// <summary>See <see cref="PermissionsConfiguration.AllowUnauthenticated"/>.</summary>
     void SetAllowUnauthenticated(bool allowed);
@@ -25,12 +25,10 @@ public interface IWritablePermissions : IPermissionsConfigurationSource
     void SetGrants(string userId, IReadOnlyList<string> tools);
 
     /// <summary>
-    /// Forgets a user's grants entirely.
-    ///
-    /// <para>Called when a user is deleted. Identity does not reach across to do it: the layer that
-    /// owns the grants drops its own entry, so neither has to know the other's shape.</para>
+    /// Forgets a user's grants entirely. <see cref="Users.IUserDependent.ForgetUser"/> as this layer
+    /// implements it — called when a user is deleted, and also on its own to tidy an entry left behind.
     /// </summary>
-    void ForgetUser(string userId);
+    new void ForgetUser(string userId);
 }
 
 /// <summary>A fixed document, for tests and for a host composing policy in code.</summary>

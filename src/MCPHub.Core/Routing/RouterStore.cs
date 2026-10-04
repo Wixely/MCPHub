@@ -3,18 +3,25 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MCPHub.Core.Infrastructure;
+using MCPHub.Core.Users;
 
 namespace MCPHub.Core.Routing;
 
 /// <summary>Atomic router configuration snapshots. Input keys are hashed, output keys protected at rest.</summary>
-public sealed class RouterStore : IRouterConfigurationSource
+public sealed class RouterStore : IRouterConfigurationSource, IUserDependent
 {
     private readonly object _gate = new();
     private readonly string _path;
+    private readonly IUserDirectory _users;
     private RouterConfiguration _current;
 
-    public RouterStore(IAppPaths paths)
+    /// <param name="users">Who a key belongs to. The Router used to answer that itself, with its own
+    /// keys; asking the one directory instead is what makes a caller's key work on both surfaces and one
+    /// suspension stop both.</param>
+    public RouterStore(IAppPaths paths, IUserDirectory users)
     {
+        ArgumentNullException.ThrowIfNull(users);
+        _users = users;
         _path = Path.Combine(paths.SettingsDirectory, "router.json");
         try
         {
@@ -25,6 +32,11 @@ public sealed class RouterStore : IRouterConfigurationSource
             // Settings added after a file was written arrive absent, not defaulted. Filling the bind address
             // in here means the rest of the app only ever sees a concrete one, and the next save records it.
             _current = _current with { BindAddress = RouterConfigurationRules.CoerceBindAddress(_current.BindAddress) };
+            if (RouterUserMigration.IsNeeded(_current))
+            {
+                _current = _current with { Inputs = Migrate() };
+            }
+
             RouterConfigurationRules.Validate(_current);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
@@ -73,32 +85,29 @@ public sealed class RouterStore : IRouterConfigurationSource
         return c with { Outputs = c.Outputs.Where(o => o.Id != id).ToArray() };
     });
 
-    public (string Id, string Key) AddInput(string name, string? outputId)
+    /// <summary>
+    /// Gives a user Router access, or moves the output it routes to. No key is issued: the user already
+    /// holds one, and issuing a second here is the mistake this whole arrangement removes.
+    /// </summary>
+    public void SetRoute(string userId, string? outputId)
     {
-        var key = NewKey();
-        var input = new RouterInput { Name = name.Trim(), OutputId = EmptyToNull(outputId), KeyHash = HashKey(key) };
-        Update(c => c with { Inputs = [.. c.Inputs, input] });
-        return (input.Id, key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        if (_users.Snapshot.Users.All(u => !string.Equals(u.Id, userId, StringComparison.Ordinal)))
+            throw new ArgumentException("That user no longer exists. Add it on the Users page first.");
+        var input = new RouterInput { UserId = userId, OutputId = EmptyToNull(outputId) };
+        Update(c => c with { Inputs = [.. c.Inputs.Where(i => i.UserId != userId), input] });
     }
 
-    public void SaveInput(string id, string name, string? outputId, bool enabled) => Update(c =>
-    {
-        if (!c.Inputs.Any(i => i.Id == id)) throw new ArgumentException("Input no longer exists.");
-        return c with { Inputs = c.Inputs.Select(i => i.Id == id ? i with { Name = name.Trim(), OutputId = EmptyToNull(outputId), Enabled = enabled } : i).ToArray() };
-    });
+    /// <summary>
+    /// Takes Router access away, leaving the user and its key alone — it may still be reaching tools
+    /// through the proxy. Called when a user is deleted too, so no route is left naming nobody.
+    /// </summary>
+    public void RemoveRoute(string userId) =>
+        Update(c => c with { Inputs = c.Inputs.Where(i => i.UserId != userId).ToArray() });
 
-    public string RotateKey(string id)
-    {
-        var key = NewKey();
-        Update(c =>
-        {
-            if (!c.Inputs.Any(i => i.Id == id)) throw new ArgumentException("Input no longer exists.");
-            return c with { Inputs = c.Inputs.Select(i => i.Id == id ? i with { KeyHash = HashKey(key) } : i).ToArray() };
-        });
-        return key;
-    }
-
-    public void RemoveInput(string id) => Update(c => c with { Inputs = c.Inputs.Where(i => i.Id != id).ToArray() });
+    /// <summary>What this layer keeps for a deleted user: its route, and nothing else. Harmless for a
+    /// user that never had one, which matters because deletion calls every implementation.</summary>
+    void IUserDependent.ForgetUser(string userId) => RemoveRoute(userId);
 
     /// <summary>
     /// Replaces the whole routing table from a settings archive. Outputs arrive without credentials, so each
@@ -157,18 +166,50 @@ public sealed class RouterStore : IRouterConfigurationSource
         return keys;
     }
 
+    /// <summary>
+    /// The route for a presented key, or null.
+    ///
+    /// <para>Two questions, asked in order and on every call: the directory says who holds the key and
+    /// whether it is still allowed in, and this document says whether that user may use the Router. A
+    /// user with no input is refused rather than falling back to the default output — reaching a tool
+    /// and reaching a model are separate grants.</para>
+    /// </summary>
     public RouterRoute? Resolve(string key)
     {
-        if (LoadError is not null || key.Length is < 16 or > 256) return null;
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        if (LoadError is not null) return null;
+        if (_users.Resolve(key) is not { } user) return null;
         lock (_gate)
         {
-            var input = _current.Inputs.FirstOrDefault(i => i.Enabled &&
-                CryptographicOperations.FixedTimeEquals(hash, Convert.FromHexString(i.KeyHash)));
+            var input = _current.Inputs.FirstOrDefault(i => string.Equals(i.UserId, user.Id, StringComparison.Ordinal));
             if (input is null) return null;
             var outputId = input.OutputId ?? _current.DefaultOutputId;
             var output = _current.Outputs.FirstOrDefault(o => o.Id == outputId);
-            return new(input.Id, output) { ReadApiKey = () => output is null ? null : ReadApiKey(output) };
+            return new(user.Id, output) { ReadApiKey = () => output is null ? null : ReadApiKey(output) };
+        }
+    }
+
+    /// <summary>
+    /// Adopts the legacy inputs into the user directory and returns the routes that replace them. Called
+    /// at load, before validation, because a document carrying identity is no longer valid.
+    ///
+    /// <para>Written back on the next save rather than immediately: a read that rewrites the file is a
+    /// surprise, and the in-memory routes are already right. Needing a writable directory is why a
+    /// read-only one reports instead — migrating is a change, and a mounted document cannot take one.</para>
+    /// </summary>
+    private RouterInput[] Migrate()
+    {
+        if (_users is not IWritableUsers writable)
+            throw new ArgumentException("Router configuration still carries its own agent keys and the user directory is read-only.");
+        try
+        {
+            return RouterUserMigration.Migrate(_path, writable);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The directory refusing to be written — users.json unreadable, say. Turned into the kind of
+            // failure this constructor reports, so the hub comes up routing nobody and saying why rather
+            // than throwing out of a store somebody is only reading.
+            throw new ArgumentException(ex.Message, ex);
         }
     }
 
@@ -214,8 +255,6 @@ public sealed class RouterStore : IRouterConfigurationSource
     public static string NormalizeBaseUrl(string value) => RouterConfigurationRules.NormalizeBaseUrl(value);
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    private static string NewKey() => "mhrouter_" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
-    private static string HashKey(string key) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
     private static string? ProtectKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

@@ -7,10 +7,13 @@ services:
       - "127.0.0.1:5801:5801"
     environment:
       MCPHUB_ROUTER_CONFIG: /config/router.json
+      MCPHUB_USERS_CONFIG: /config/users.json
       MCPHUB_ROUTER_BIND: 0.0.0.0
       MCPHUB_ROUTER_PORT: "5801"
     volumes:
       - ./router.json:/config/router.json:ro
+      # Identity is its own document: who holds which key, independent of what they may reach.
+      - ./users.json:/config/users.json:ro
     secrets:
       - agent_key
       - model_key

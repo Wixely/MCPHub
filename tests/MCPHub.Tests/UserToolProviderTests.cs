@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MCPHub.Core.Permissions;
+using MCPHub.Core.Routing;
 using MCPHub.Core.Users;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
@@ -26,8 +27,8 @@ public sealed class UserToolProviderTests : IDisposable
 
     private PermissionsStore Permissions() => new(new FakeAppPaths(_dir.Path));
 
-    private UserToolProvider Provider(IUserDirectory users, IWritablePermissions? permissions = null) =>
-        new(users, permissions, NullLogger<UserToolProvider>.Instance);
+    private UserToolProvider Provider(IUserDirectory users, params IUserDependent[] dependents) =>
+        new(users, dependents, NullLogger<UserToolProvider>.Instance);
 
     private static async Task<JsonElement> CallAsync(
         UserToolProvider provider, string tool, object? arguments = null)
@@ -140,28 +141,32 @@ public sealed class UserToolProviderTests : IDisposable
     }
 
     /// <summary>
-    /// Deleting takes the grants with it, so nothing is left granting tools to an id nobody holds —
-    /// and a user re-created with the same name starts with nothing rather than inheriting.
+    /// Deleting takes everything keyed to the user with it, so nothing is left naming an id nobody
+    /// holds — and a user created next starts with nothing rather than inheriting.
     /// </summary>
     [Fact]
-    public async Task Deleting_a_user_retires_its_key_and_drops_its_grants()
+    public async Task Deleting_a_user_retires_its_key_and_drops_everything_keyed_to_it()
     {
         var store = Store();
         var permissions = Permissions();
+        var router = new RouterStore(new FakeAppPaths(_dir.Path), store);
         var issued = store.Create("agent");
         permissions.SetGrants(issued.User.Id, ["*"]);
+        router.SetRoute(issued.User.Id, null);
 
-        await CallAsync(Provider(store, permissions), "delete", new { user = "agent" });
+        var changed = await CallAsync(Provider(store, permissions, router), "delete", new { user = "agent" });
 
         Assert.Null(store.Resolve(issued.Key));
         Assert.Empty(store.Snapshot.Users);
         Assert.Empty(permissions.Snapshot.Grants);
+        Assert.Empty(router.Snapshot.Inputs);
+        Assert.Contains("routes", changed.GetProperty("message").GetString()!, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// A hub whose grants are mounted read-only still deletes the user: the key has to stop working.
-    /// The grant entry it leaves behind is inert and reported as such, which is better than a live key
-    /// with no owner.
+    /// A hub whose grants and routes are mounted read-only still deletes the user: the key has to stop
+    /// working. The entries it leaves behind are inert and reported as such, which is better than a live
+    /// key with no owner.
     /// </summary>
     [Fact]
     public async Task A_user_can_be_deleted_even_when_its_grants_cannot_be()
@@ -169,7 +174,7 @@ public sealed class UserToolProviderTests : IDisposable
         var store = Store();
         var issued = store.Create("agent");
 
-        await CallAsync(Provider(store, permissions: null), "delete", new { user = "agent" });
+        await CallAsync(Provider(store), "delete", new { user = "agent" });
 
         Assert.Null(store.Resolve(issued.Key));
     }

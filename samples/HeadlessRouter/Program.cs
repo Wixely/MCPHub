@@ -1,4 +1,5 @@
 using MCPHub.Core.Routing;
+using MCPHub.Core.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,9 +10,17 @@ try
     var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = args, ContentRootPath = AppContext.BaseDirectory });
     var configPath = Environment.GetEnvironmentVariable("MCPHUB_ROUTER_CONFIG")
         ?? Path.Combine(AppContext.BaseDirectory, "router.example.json");
-    var source = new RouterDeploymentSource(configPath);
+    // Identity is its own document now, as it is on the desktop: the Router says which user goes where,
+    // the users file says who holds which key. One key then works here and on the proxy, and suspending a
+    // user in that file stops both.
+    var usersPath = Environment.GetEnvironmentVariable("MCPHUB_USERS_CONFIG")
+        ?? Path.Combine(AppContext.BaseDirectory, "users.example.json");
+    var users = new UsersDeploymentSource(usersPath);
+    var source = new RouterDeploymentSource(configPath, users);
     // Null leaves the bind address to the configuration file, which applies MCPHUB_ROUTER_BIND itself.
     var options = new RouterHostOptions();
+    builder.Services.AddSingleton(users);
+    builder.Services.AddSingleton<IUserDirectory>(users);
     builder.Services.AddSingleton(source);
     builder.Services.AddSingleton<IRouterConfigurationSource>(source);
     builder.Services.AddSingleton(options);
@@ -29,7 +38,9 @@ catch (Exception)
     return 1;
 }
 
-sealed class RouterLifetime(RouterHost router, RouterDeploymentSource source, ILogger<RouterLifetime> logger) : BackgroundService
+sealed class RouterLifetime(
+    RouterHost router, RouterDeploymentSource source, UsersDeploymentSource users, ILogger<RouterLifetime> logger)
+    : BackgroundService
 {
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -45,9 +56,11 @@ sealed class RouterLifetime(RouterHost router, RouterDeploymentSource source, IL
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                if (!source.Reload())
+                // Both documents, every tick: a key added to one and a route to the other should take
+                // effect together, and reloading only half would apply a route for a user not yet there.
+                if (!users.Reload() || !source.Reload())
                 {
-                    if (!warned) logger.LogWarning("Router reload rejected; last valid routes remain active. Check configuration and secrets; listener changes require restart.");
+                    if (!warned) logger.LogWarning("Router or users reload rejected; the last valid set remains active. Check both documents and their secrets; listener changes require restart.");
                     warned = true;
                 }
                 else if (warned)

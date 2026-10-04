@@ -99,11 +99,13 @@ The buttons:
 
 ### Router
 
-The **Router** page gives agents a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Create an input for each agent and copy its generated key into that agent's API-key setting.
+The **Router** page gives agents a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Then give a user from the **Users** page Router access: it uses the key it already holds, so one credential reaches both the models here and the tools on the proxy.
+
+Giving access is not the same as being a user: somebody created for tools alone has no Router access until it is granted here, and revoking it leaves the user and its key untouched. Suspending the user on the Users page stops both at once.
 
 Choose a **global default** output, or give individual inputs an override. Route changes apply to new requests without changing agent configuration; requests already streaming finish on their original output.
 
-**Test** an output to check it answers on its stored key before an agent depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each agent row shows when it last reached the Router and how many requests it has made.
+**Test** an output to check it answers on its stored key before an agent depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each row shows when that user last reached the Router, how many requests it has made, and whether it is suspended.
 
 The Router is off by default and listens on `http://127.0.0.1:5801/v1`. Set **Bind address** to `0.0.0.0` to accept connections from your network, or to one interface's address to bind that network alone; **Apply listener** rebinds a running Router immediately, without restarting MCPHub.
 
@@ -152,7 +154,7 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 
 ### Users
 
-Who may use this hub. One user, one key: a caller is created once here and then selected on the Permissions page, rather than being set up again — with a key that could never match — on every page that needs to know who is calling. The Model Router still keeps its own inputs; folding those onto these users is the next step.
+Who may use this hub. One user, one key, every surface: a caller is created once here and then selected on the Permissions and Router pages, rather than being set up again — with a key that could never match — on each one. A `router.json` written before this page existed is migrated on first load, so every key the old Router issued keeps working and starts working on the proxy too.
 
 By default nobody needs a key: MCPHub binds loopback, every caller is the single user, and all tools are visible — which is how it has always worked on your own machine. Turn on **Require a key** and that changes: a caller presenting no key is refused, and a caller presenting one sees only what that user is granted on the Permissions page.
 

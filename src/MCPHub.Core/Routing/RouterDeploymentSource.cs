@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MCPHub.Core.Users;
 
 namespace MCPHub.Core.Routing;
 
@@ -10,16 +11,30 @@ namespace MCPHub.Core.Routing;
 public sealed class RouterDeploymentSource : IRouterConfigurationSource
 {
     private readonly string _path;
+    private readonly IUserDirectory _users;
     private readonly Func<string, string?> _environment;
     private DeploymentState _state;
     private string? _reloadError;
     private sealed record DeploymentState(RouterConfiguration Configuration, IReadOnlyDictionary<string, string?> Keys);
 
-    public RouterDeploymentSource(string path, Func<string, string?>? environment = null)
+    /// <param name="users">The mounted user directory. Identity used to be in this document, with each
+    /// input naming a key file or variable of its own; it is a users document's business now, so one key
+    /// serves the Router and the proxy and a suspension in that file stops both.</param>
+    public RouterDeploymentSource(string path, IUserDirectory users, Func<string, string?>? environment = null)
     {
+        ArgumentNullException.ThrowIfNull(users);
+        _users = users;
         _path = Path.GetFullPath(path);
         _environment = environment ?? Environment.GetEnvironmentVariable;
         try { _state = Read(); }
+        catch (RouterMigrationRequiredException)
+        {
+            // Let this one past IsConfigurationError's net with its own message: it is the one startup
+            // failure where the file is intact and the fix is in a different file.
+            throw new InvalidOperationException(
+                "Router deployment inputs carry their own agent keys, which moved to the users document. "
+                + "Give each input a UserId and declare that user's key there.");
+        }
         catch (Exception ex) when (IsConfigurationError(ex))
         {
             // No exception payload: JSON values, secret paths, or environment contents must not enter logs.
@@ -57,17 +72,16 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
         }
     }
 
+    /// <inheritdoc cref="RouterStore.Resolve"/>
     public RouterRoute? Resolve(string key)
     {
-        if (key.Length is < 16 or > 256) return null;
+        if (_users.Resolve(key) is not { } user) return null;
         var state = Volatile.Read(ref _state);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        var input = state.Configuration.Inputs.FirstOrDefault(i => i.Enabled &&
-            CryptographicOperations.FixedTimeEquals(hash, Convert.FromHexString(i.KeyHash)));
+        var input = state.Configuration.Inputs.FirstOrDefault(i => string.Equals(i.UserId, user.Id, StringComparison.Ordinal));
         if (input is null) return null;
         var output = state.Configuration.Outputs.FirstOrDefault(o => o.Id == (input.OutputId ?? state.Configuration.DefaultOutputId));
         var apiKey = output is null ? null : state.Keys[output.Id];
-        return new(input.Id, output) { ReadApiKey = () => apiKey };
+        return new(user.Id, output) { ReadApiKey = () => apiKey };
     }
 
     private DeploymentState Read()
@@ -92,14 +106,14 @@ public sealed class RouterDeploymentSource : IRouterConfigurationSource
         var inputs = config.Inputs.Select(i =>
         {
             if (i is null) throw new ArgumentException("Invalid input.");
-            var secret = ReadSecret(i.KeyFile, i.KeyEnvironmentVariable, required: i.KeyHash is null);
-            if (secret is not null && i.KeyHash is not null) throw new ArgumentException("Choose one input credential source.");
-            if (secret is not null && secret.Length is < 32 or > 256) throw new ArgumentException("Input keys must contain 32–256 characters.");
-            return new RouterInput
-            {
-                Id = i.Id, Name = i.Name, Enabled = i.Enabled, OutputId = i.OutputId,
-                KeyHash = i.KeyHash ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(secret!))),
-            };
+
+            // Named by code rather than lumped in with "invalid configuration": a deployment file written
+            // against the old shape is a migration, not a typo, and the operator needs to be sent to the
+            // users document rather than left reading this one. No field value is quoted — those are keys.
+            if (i.KeyHash is not null || i.KeyFile is not null || i.KeyEnvironmentVariable is not null || i.Name is not null)
+                throw new RouterMigrationRequiredException();
+            if (string.IsNullOrWhiteSpace(i.UserId)) throw new ArgumentException("Invalid input.");
+            return new RouterInput { UserId = i.UserId, OutputId = i.OutputId };
         }).ToArray();
         var runtime = new RouterConfiguration { Port = port, BindAddress = bindAddress, Inputs = inputs, Outputs = outputs, DefaultOutputId = config.DefaultOutputId };
         RouterConfigurationRules.Validate(runtime);
@@ -141,14 +155,32 @@ public sealed record RouterDeploymentConfiguration
 }
 public sealed record RouterDeploymentInput
 {
-    public string Id { get; init; } = string.Empty;
-    public string Name { get; init; } = string.Empty;
-    public bool Enabled { get; init; } = true;
+    /// <summary>The user allowed through the Router — an id from the mounted users document.</summary>
+    public string UserId { get; init; } = string.Empty;
+
     public string? OutputId { get; init; }
+
+    // ---- refused, not ignored -------------------------------------------------------------------
+
+    /// <summary>
+    /// Identity as this document used to carry it. Still read, and only so that a file written against
+    /// the old shape is refused by name: silently ignoring a key field would start a hub that let nobody
+    /// in and said nothing about why.
+    /// </summary>
+    public string? Name { get; init; }
+
+    /// <inheritdoc cref="Name"/>
     public string? KeyHash { get; init; }
+
+    /// <inheritdoc cref="Name"/>
     public string? KeyFile { get; init; }
+
+    /// <inheritdoc cref="Name"/>
     public string? KeyEnvironmentVariable { get; init; }
 }
+
+/// <summary>A deployment document written before identity moved to the users document.</summary>
+internal sealed class RouterMigrationRequiredException() : Exception("Router inputs still carry keys.");
 public sealed record RouterDeploymentOutput
 {
     public string Id { get; init; } = string.Empty;
