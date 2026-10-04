@@ -206,6 +206,12 @@ public sealed record PermissionsDeploymentPrincipal
     public string[] Tools { get; init; } = [];
 }
 
+/// <summary>
+/// The stored documents, written as the router writes its configuration — property names as declared.
+/// Tool RESULTS use <see cref="PermissionsResultsJsonContext"/> instead, which is camelCase like the
+/// management tools' results: a file a person edits and a payload a client parses are different
+/// audiences, and the two siblings already differ this way.
+/// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(PermissionsConfiguration))]
 [JsonSerializable(typeof(PermissionsDeploymentConfiguration))]

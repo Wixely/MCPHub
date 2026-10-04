@@ -226,4 +226,13 @@ public sealed class MCPHubSettings
 
     /// <summary>Agents may check GitHub for server releases and for MCPHub itself. Overridable with <c>MCPHUB_AGENT_MANAGEMENT_UPDATE_CHECKS</c>.</summary>
     public bool AgentManagementUpdateChecksEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Whether a caller gets the <c>permissions__*</c> tools: reading and editing who may use which tools.
+    /// Off by default, and for a stronger reason than agent management is — these tools govern all the
+    /// others, so a caller holding them can grant itself anything. Keeping it a separate switch means the
+    /// widest tool grant (<c>*</c>) does not quietly amount to administrator. A management UI's deployment
+    /// turns it on deliberately. Overridable with <c>MCPHUB_PERMISSIONS_MANAGEMENT_ENABLED</c>.
+    /// </summary>
+    public bool PermissionsManagementEnabled { get; set; }
 }
