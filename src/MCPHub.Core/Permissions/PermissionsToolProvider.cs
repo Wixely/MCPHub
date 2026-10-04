@@ -242,11 +242,18 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         return Json(new PermissionsStatus
         {
             AllowUnauthenticated = snapshot.AllowUnauthenticated,
+            KeysEnforced = !snapshot.AllowUnauthenticated,
             Editable = _source is IWritablePermissions,
             PrincipalCount = snapshot.Principals.Length,
             EnabledPrincipalCount = snapshot.Principals.Count(p => p.Enabled),
             LoadError = (_source as PermissionsStore)?.LoadError,
             ReloadError = (_source as PermissionsDeploymentSource)?.ReloadError,
+            Warning = snapshot is { AllowUnauthenticated: true, Principals.Length: > 0 }
+                ? $"{snapshot.Principals.Length} principal(s) exist, but unauthenticated callers are "
+                  + "allowed — so every caller is served as the single-user tenant and no grant has any "
+                  + "effect. Call permissions__set_allow_unauthenticated with allowed=false to start "
+                  + "enforcing keys."
+                : null,
         }, PermissionsResultsJsonContext.Default.PermissionsStatus);
     }
 

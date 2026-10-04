@@ -24,6 +24,22 @@ public sealed class ProxyHostOptions
     /// </summary>
     public ITenantAuthenticator? TenantAuthenticator { get; init; }
 
+    /// <summary>
+    /// Consulted when a request presents <em>no</em> token at all: <see langword="true"/> serves it as
+    /// <see cref="TenantContext.Default"/>, <see langword="false"/> answers <c>401</c>.
+    ///
+    /// <para>A predicate rather than a flag because the answer can change while the host runs — a hub
+    /// that starts out single-user and later issues keys should begin refusing anonymous callers
+    /// without being restarted, and one that stops enforcing should stop refusing them. Without this
+    /// the mere presence of a <see cref="TenantAuthenticator"/> would refuse every token-less client,
+    /// so a hub could not hold both a keyed consumer and a local tool that presents nothing.</para>
+    ///
+    /// <para>Null, the default, means anonymous requests are refused whenever an authenticator is set
+    /// — the original behaviour. A token that is <em>presented</em> and not recognised is always
+    /// <c>401</c>, whatever this says: a wrong key must never quietly become the default tenant.</para>
+    /// </summary>
+    public Func<bool>? AllowAnonymous { get; init; }
+
     /// <summary>Server name advertised in the MCP initialize handshake.</summary>
     public string ServerName { get; init; } = "MCPHub";
 
@@ -122,7 +138,7 @@ public sealed class ProxyHost
             app.Urls.Add($"http://{bindAddress}:{port}");
 
             if (_options.TenantAuthenticator is { } authenticator)
-                app.Use((context, next) => AuthenticateAsync(context, next, authenticator));
+                app.Use((context, next) => AuthenticateAsync(context, next, authenticator, _options.AllowAnonymous));
 
             app.MapMcp("/mcp");
 
@@ -164,7 +180,8 @@ public sealed class ProxyHost
         await StartAsync(bindAddress, port, cancellationToken);
     }
 
-    private static async Task AuthenticateAsync(HttpContext context, RequestDelegate next, ITenantAuthenticator authenticator)
+    private static async Task AuthenticateAsync(
+        HttpContext context, RequestDelegate next, ITenantAuthenticator authenticator, Func<bool>? allowAnonymous)
     {
         TenantContext? tenant = null;
         var header = context.Request.Headers.Authorization.ToString();
@@ -172,6 +189,13 @@ public sealed class ProxyHost
             header["Bearer ".Length..].Trim() is { Length: > 0 } token)
         {
             tenant = await authenticator.AuthenticateAsync(token, context.RequestAborted);
+        }
+        else if (allowAnonymous?.Invoke() == true)
+        {
+            // No token offered, and this hub is not enforcing keys. Serve it as the single-user tenant
+            // and let tool authorization decide what that may see. A token offered and rejected still
+            // falls through to 401 below.
+            tenant = TenantContext.Default;
         }
 
         if (tenant is null)

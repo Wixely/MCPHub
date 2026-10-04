@@ -31,6 +31,23 @@ public sealed record PermissionsStatus
     /// <summary>Why the last reload of a mounted document was rejected, when it was. The previous
     /// policy is still in force, which is why this is worth reporting rather than hiding.</summary>
     public string? ReloadError { get; init; }
+
+    /// <summary>
+    /// Whether keys are actually being checked — the inverse of <see cref="AllowUnauthenticated"/>.
+    ///
+    /// <para>Worth its own field because the two together describe the trap: while this is false a
+    /// caller presenting no key is served as the single-user tenant and gets everything, so principals
+    /// and their grants have no effect at all. An operator who has just created three principals and
+    /// seen nothing change is looking at exactly this.</para>
+    /// </summary>
+    public bool KeysEnforced { get; init; }
+
+    /// <summary>
+    /// Set when the policy is self-defeating in a way nothing else would report: principals exist but
+    /// keys are not being checked, so the grants are inert. Not an error — it is a legitimate state to
+    /// pass through while setting a hub up — but it is never what anybody wants to stay in.
+    /// </summary>
+    public string? Warning { get; init; }
 }
 
 /// <summary>One principal, without anything that could be used to authenticate as it.</summary>

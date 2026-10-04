@@ -38,3 +38,29 @@ public sealed class StaticTenantAuthenticator : ITenantAuthenticator
     public ValueTask<TenantContext?> AuthenticateAsync(string token, CancellationToken cancellationToken)
         => ValueTask.FromResult(_tokens.TryGetValue(token, out var tenant) ? tenant : null);
 }
+
+/// <summary>
+/// Resolves a token through a delegate — the bridge between the hosted endpoint and whatever holds the
+/// hub's principals.
+///
+/// <para>A delegate rather than an interface so that this assembly needs no reference to the one that
+/// owns the policy: the permissions document lives in MCPHub.Core, which already depends on the proxy,
+/// and making the host depend on it as well would be a loop in the dependency graph drawn only to
+/// carry one method. The composition root supplies <c>key =&gt; store.Resolve(key)</c>.</para>
+/// </summary>
+public sealed class DelegatingTenantAuthenticator : ITenantAuthenticator
+{
+    private readonly Func<string, TenantContext?> _resolve;
+
+    /// <param name="resolve">Maps a presented token to a tenant, or null to refuse it. Called on the
+    /// request path, so it should be a lookup rather than any kind of I/O.</param>
+    public DelegatingTenantAuthenticator(Func<string, TenantContext?> resolve)
+    {
+        ArgumentNullException.ThrowIfNull(resolve);
+        _resolve = resolve;
+    }
+
+    /// <inheritdoc />
+    public ValueTask<TenantContext?> AuthenticateAsync(string token, CancellationToken cancellationToken)
+        => ValueTask.FromResult(_resolve(token));
+}

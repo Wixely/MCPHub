@@ -10,6 +10,7 @@ using MCPHub.Core.Logging;
 using MCPHub.Core.Backup;
 using MCPHub.Core.Management;
 using MCPHub.Core.Models;
+using MCPHub.Core.Permissions;
 using MCPHub.Core.Process;
 using MCPHub.Core.Recipes;
 using MCPHub.Core.Routing;
@@ -84,30 +85,64 @@ public static class Composition
         services.AddSingleton<AgentManagementPolicy>();
         services.AddSingleton<IAgentManagementPolicy>(sp => sp.GetRequiredService<AgentManagementPolicy>());
 
+        // Who may use which tools, and the tools for managing that. The hub is authoritative: a caller
+        // presents a key, is resolved to one principal, and sees only what that principal is granted.
+        // Off in effect until keys are enforced (AllowUnauthenticated false), which is what keeps the
+        // single-user desktop behaving exactly as it always has.
+        services.AddSingleton<PermissionsStore>();
+        services.AddSingleton<IPermissionsConfigurationSource>(sp => sp.GetRequiredService<PermissionsStore>());
+        services.AddSingleton<IWritablePermissions>(sp => sp.GetRequiredService<PermissionsStore>());
+        services.AddSingleton<PermissionsToolAuthorization>();
+        // Its own switch, off by default: these tools govern every other tool, so without it the widest
+        // grant would silently amount to administrator.
+        services.AddSingleton<PermissionsManagementPolicy>();
+
         // MCP proxy / aggregator
         services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
         // Explicit factory: registering ProxyHandlers by type makes the container fall back to the
         // registry-only constructor (the policy overload has a non-defaulted parameter it cannot
         // resolve), which would silently drop the in-process tool providers.
+        // Registered rather than built inline, because the permissions tools need the same stack they
+        // are governed by: permissions__explain answers "why can this caller not use this tool" across
+        // every policy, and a second composite built for it could drift from the one that enforces.
+        services.AddSingleton(sp => new CompositeToolAuthorization(
+            sp.GetRequiredService<RecipeAccessPolicy>(),
+            sp.GetRequiredService<AgentManagementPolicy>(),
+            sp.GetRequiredService<PermissionsManagementPolicy>(),
+            sp.GetRequiredService<PermissionsToolAuthorization>()));
+        services.AddSingleton<IToolAuthorization>(sp => sp.GetRequiredService<CompositeToolAuthorization>());
+        services.AddSingleton<ILocalToolProvider>(sp => new PermissionsToolProvider(
+            sp.GetRequiredService<IPermissionsConfigurationSource>(),
+            sp.GetRequiredService<CompositeToolAuthorization>(),
+            sp.GetRequiredService<ILogger<PermissionsToolProvider>>()));
         services.AddSingleton(sp => new ProxyHandlers(
             sp.GetRequiredService<IUpstreamRegistry>(),
-            authorization: new CompositeToolAuthorization(
-                sp.GetRequiredService<RecipeAccessPolicy>(),
-                sp.GetRequiredService<AgentManagementPolicy>()),
+            authorization: sp.GetRequiredService<CompositeToolAuthorization>(),
             auditSink: null,
-            tenantResolver: null,
+            tenantResolver: ClaimsTenantResolver.Instance,
             localToolProviders: sp.GetServices<ILocalToolProvider>()));
         // Instructions are captured when the host is built, so they reflect the policies at launch (and after a
         // proxy restart); tool visibility itself follows the checkboxes live.
-        services.AddSingleton(sp => new ProxyHost(
-            sp.GetRequiredService<ProxyHandlers>(),
-            sp.GetRequiredService<ILoggerFactory>(),
-            new ProxyHostOptions
-            {
-                ServerInstructions = CombineInstructions(
-                    sp.GetRequiredService<IRecipeAccessPolicy>().ServerInstructions,
-                    sp.GetRequiredService<IAgentManagementPolicy>().ServerInstructions),
-            }));
+        services.AddSingleton(sp =>
+        {
+            var permissions = sp.GetRequiredService<IPermissionsConfigurationSource>();
+            return new ProxyHost(
+                sp.GetRequiredService<ProxyHandlers>(),
+                sp.GetRequiredService<ILoggerFactory>(),
+                new ProxyHostOptions
+                {
+                    ServerInstructions = CombineInstructions(
+                        sp.GetRequiredService<IRecipeAccessPolicy>().ServerInstructions,
+                        sp.GetRequiredService<IAgentManagementPolicy>().ServerInstructions),
+
+                    // Always wired, so a key issued later works without restarting the proxy; whether a
+                    // caller may present NO key is asked per request, so turning enforcement on and off
+                    // takes effect live too.
+                    TenantAuthenticator = new DelegatingTenantAuthenticator(key =>
+                        permissions.Resolve(key) is { } principal ? new TenantContext(principal.Id) : null),
+                    AllowAnonymous = () => permissions.Snapshot.AllowUnauthenticated,
+                });
+        });
         services.AddSingleton<ProxyCoordinator>();
 
         // HTTP clients: GitHub releases, a short-timeout health probe, and long-timeout downloads.
