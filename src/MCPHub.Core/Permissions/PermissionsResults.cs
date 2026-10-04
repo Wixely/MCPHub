@@ -5,9 +5,9 @@ namespace MCPHub.Core.Permissions;
 /// <summary>
 /// What the <c>permissions__*</c> tools return.
 ///
-/// <para>JSON records rather than prose, so a management UI can render and branch on them. Every
-/// failure carries a stable <see cref="PermissionsDenial.Code"/> for exactly that reason: the wording
-/// of a reason may improve, and a client matching on wording would break when it did.</para>
+/// <para>JSON records rather than prose, so a management client can render and branch on them. Every
+/// failure carries a stable <see cref="PermissionsDenial.Code"/> for that reason: the wording of a
+/// reason may improve, and a client matching on wording would break when it did.</para>
 /// </summary>
 public sealed record PermissionsStatus
 {
@@ -15,60 +15,62 @@ public sealed record PermissionsStatus
     public bool AllowUnauthenticated { get; init; }
 
     /// <summary>
-    /// False when policy is mounted read-only. A management UI should grey its editing controls rather
-    /// than let somebody make changes that cannot land.
-    /// </summary>
-    public bool Editable { get; init; }
-
-    public int PrincipalCount { get; init; }
-
-    public int EnabledPrincipalCount { get; init; }
-
-    /// <summary>Why the stored document was rejected at startup, when it was. Nothing is recognised
-    /// while this is set, so it explains a hub that refuses every key at once.</summary>
-    public string? LoadError { get; init; }
-
-    /// <summary>Why the last reload of a mounted document was rejected, when it was. The previous
-    /// policy is still in force, which is why this is worth reporting rather than hiding.</summary>
-    public string? ReloadError { get; init; }
-
-    /// <summary>
     /// Whether keys are actually being checked — the inverse of <see cref="AllowUnauthenticated"/>.
     ///
-    /// <para>Worth its own field because the two together describe the trap: while this is false a
-    /// caller presenting no key is served as the single-user tenant and gets everything, so principals
-    /// and their grants have no effect at all. An operator who has just created three principals and
-    /// seen nothing change is looking at exactly this.</para>
+    /// <para>Its own field because the two together describe the trap: while this is false a caller
+    /// presenting no key is served as the single user and gets everything, so users and their grants
+    /// have no effect at all.</para>
     /// </summary>
     public bool KeysEnforced { get; init; }
 
-    /// <summary>
-    /// Set when the policy is self-defeating in a way nothing else would report: principals exist but
-    /// keys are not being checked, so the grants are inert. Not an error — it is a legitimate state to
-    /// pass through while setting a hub up — but it is never what anybody wants to stay in.
-    /// </summary>
+    /// <summary>False when policy is mounted read-only. A client should grey its editing controls
+    /// rather than let somebody make changes that cannot land.</summary>
+    public bool Editable { get; init; }
+
+    public int UserCount { get; init; }
+
+    public int EnabledUserCount { get; init; }
+
+    /// <summary>How many users have any grants. A gap between this and <see cref="EnabledUserCount"/>
+    /// is users that can authenticate and then do nothing, which is usually a half-finished setup.</summary>
+    public int GrantedUserCount { get; init; }
+
+    /// <summary>Why the stored document was rejected at startup, when it was. No user is granted
+    /// anything while this is set, so it explains a hub that refuses every tool at once.</summary>
+    public string? LoadError { get; init; }
+
+    /// <summary>Why the last reload of a mounted document was rejected. The previous policy is still
+    /// in force, which is why this is worth reporting rather than hiding.</summary>
+    public string? ReloadError { get; init; }
+
+    /// <summary>Set when the policy is self-defeating in a way nothing else would report — see
+    /// <see cref="KeysEnforced"/>. Not an error; it is a legitimate state to pass through while
+    /// setting a hub up, and never one to stay in.</summary>
     public string? Warning { get; init; }
 }
 
-/// <summary>One principal, without anything that could be used to authenticate as it.</summary>
-public sealed record PermissionsPrincipalSummary
+/// <summary>One user's grants, joined with enough of its identity to be legible.</summary>
+public sealed record PermissionsGrantSummary
 {
-    public string Id { get; init; } = string.Empty;
+    public string UserId { get; init; } = string.Empty;
 
-    public string Name { get; init; } = string.Empty;
+    /// <summary>The user's name, or empty when the grant names a user that no longer exists — which is
+    /// itself worth seeing, since it is a grant doing nothing.</summary>
+    public string UserName { get; init; } = string.Empty;
 
-    public bool Enabled { get; init; }
+    /// <summary>Whether that user can authenticate at all. A grant on a suspended user applies to
+    /// nothing.</summary>
+    public bool UserEnabled { get; init; }
+
+    /// <summary>False when no user has this id. The grant is inert and should probably be removed.</summary>
+    public bool UserExists { get; init; }
 
     public string[] Tools { get; init; } = [];
-
-    /// <summary>The first few characters of the key's hash — enough to tell two keys apart in a
-    /// conversation, and no use for authenticating.</summary>
-    public string KeyFingerprint { get; init; } = string.Empty;
 }
 
-public sealed record PermissionsPrincipalList
+public sealed record PermissionsGrantList
 {
-    public PermissionsPrincipalSummary[] Principals { get; init; } = [];
+    public PermissionsGrantSummary[] Grants { get; init; } = [];
 }
 
 /// <summary>One reason a tool is unavailable. Mirrors <see cref="Proxy.ToolDenial"/> for the wire.</summary>
@@ -86,15 +88,17 @@ public sealed record PermissionsDenial
 }
 
 /// <summary>
-/// Why a tool is or is not available to a principal.
+/// Why a tool is or is not available to a user.
 ///
-/// <para><see cref="Denials"/> holds <em>every</em> reason rather than the first, which is the point
-/// of the tool: a grant and a feature switch can both be withholding the same tool, and an operator
-/// who fixes one and sees no change will conclude the fix did not work.</para>
+/// <para><see cref="Denials"/> holds <em>every</em> reason rather than the first, which is the point of
+/// the tool: a grant and a feature switch can both be withholding the same tool, and an operator who
+/// fixes one and sees no change will conclude the fix did not work.</para>
 /// </summary>
 public sealed record PermissionsExplanation
 {
-    public PermissionsPrincipalSummary Principal { get; init; } = new();
+    public string UserId { get; init; } = string.Empty;
+
+    public string UserName { get; init; } = string.Empty;
 
     public string Tool { get; init; } = string.Empty;
 
@@ -105,37 +109,23 @@ public sealed record PermissionsExplanation
     public PermissionsDenial[] Denials { get; init; } = [];
 }
 
-/// <summary>A newly issued key. The only place one ever appears.</summary>
-public sealed record PermissionsKeyIssued
-{
-    public PermissionsPrincipalSummary Principal { get; init; } = new();
-
-    public string Key { get; init; } = string.Empty;
-
-    /// <summary>Said out loud because the consequence is unrecoverable rather than merely annoying.</summary>
-    public string Notice { get; init; } = string.Empty;
-}
-
 public sealed record PermissionsChange
 {
     public string Message { get; init; } = string.Empty;
 
-    /// <summary>The principal as it now stands, or null when it was deleted or the change was not
-    /// about one.</summary>
-    public PermissionsPrincipalSummary? Principal { get; init; }
+    public PermissionsGrantSummary? Grant { get; init; }
 }
 
-/// <summary>Source-generated JSON context for permissions tool results: indented, camelCase, nulls
-/// omitted — the same shape <c>ManagementJsonContext</c> uses, so a client parsing one hub surface
-/// does not have to switch conventions for another.</summary>
+/// <summary>Source-generated JSON for permissions tool results: indented, camelCase, nulls omitted —
+/// the same shape <c>ManagementJsonContext</c> uses, so a client parsing one hub surface does not have
+/// to switch conventions for another.</summary>
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(PermissionsStatus))]
-[JsonSerializable(typeof(PermissionsPrincipalList))]
+[JsonSerializable(typeof(PermissionsGrantList))]
 [JsonSerializable(typeof(PermissionsExplanation))]
-[JsonSerializable(typeof(PermissionsKeyIssued))]
 [JsonSerializable(typeof(PermissionsChange))]
 [JsonSerializable(typeof(PermissionsDenial))]
 public sealed partial class PermissionsResultsJsonContext : JsonSerializerContext;

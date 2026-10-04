@@ -1,28 +1,39 @@
 namespace MCPHub.Core.Permissions;
 
 /// <summary>
-/// Runtime boundary shared by desktop storage and read-only deployment configuration — the same
-/// split <see cref="Routing.IRouterConfigurationSource"/> makes, for the same reason: the enforcement
-/// point should not care whether an operator is editing policy in a window or mounting it into a
-/// container.
+/// Reading the grant document. The boundary shared by desktop storage and read-only deployment
+/// configuration, as the Router and the user directory both have.
 /// </summary>
 public interface IPermissionsConfigurationSource
 {
     PermissionsConfiguration Snapshot { get; }
 
-    /// <summary>
-    /// The principal holding <paramref name="key"/>, or null when no enabled principal does.
-    ///
-    /// <para>On the source rather than on the caller because the comparison must be constant-time
-    /// and the hashing must match what was stored. A consumer handed the snapshot could get both
-    /// subtly wrong, and the failure would be silent in the direction that matters.</para>
-    /// </summary>
-    PermissionsPrincipal? Resolve(string key);
+    /// <summary>What this user may use, or null when it has no grants at all — which is the default
+    /// and means it may use nothing.</summary>
+    PermissionsGrant? GrantsFor(string userId);
 }
 
-/// <summary>
-/// A fixed document, for tests and for a host that composes policy in code rather than reading it.
-/// </summary>
+/// <summary>Changing it. Separate so a deployment whose policy is a mounted file can refuse edits by
+/// name rather than appear to accept them.</summary>
+public interface IWritablePermissions : IPermissionsConfigurationSource
+{
+    /// <summary>See <see cref="PermissionsConfiguration.AllowUnauthenticated"/>.</summary>
+    void SetAllowUnauthenticated(bool allowed);
+
+    /// <summary>Replaces this user's grants, adding an entry when it had none. An empty list leaves the
+    /// user granted nothing.</summary>
+    void SetGrants(string userId, IReadOnlyList<string> tools);
+
+    /// <summary>
+    /// Forgets a user's grants entirely.
+    ///
+    /// <para>Called when a user is deleted. Identity does not reach across to do it: the layer that
+    /// owns the grants drops its own entry, so neither has to know the other's shape.</para>
+    /// </summary>
+    void ForgetUser(string userId);
+}
+
+/// <summary>A fixed document, for tests and for a host composing policy in code.</summary>
 public sealed class StaticPermissionsSource : IPermissionsConfigurationSource
 {
     private readonly PermissionsConfiguration _configuration;
@@ -34,49 +45,8 @@ public sealed class StaticPermissionsSource : IPermissionsConfigurationSource
         _configuration = configuration;
     }
 
-    public PermissionsConfiguration Snapshot =>
-        _configuration with { Principals = [.. _configuration.Principals] };
+    public PermissionsConfiguration Snapshot => _configuration with { Grants = [.. _configuration.Grants] };
 
-    public PermissionsPrincipal? Resolve(string key) =>
-        PermissionsResolver.Resolve(_configuration, key);
-}
-
-/// <summary>Key comparison, in one place so every source does it identically.</summary>
-public static class PermissionsResolver
-{
-    /// <summary>
-    /// The enabled principal whose stored hash matches <paramref name="key"/>.
-    ///
-    /// <para>Fixed-time comparison per candidate, so the time taken does not reveal how much of a
-    /// hash was right. Disabled principals are skipped rather than matched-then-rejected, which
-    /// keeps "suspended" indistinguishable from "unknown" to whoever is presenting the key.</para>
-    /// </summary>
-    public static PermissionsPrincipal? Resolve(PermissionsConfiguration configuration, string key)
-    {
-        ArgumentNullException.ThrowIfNull(configuration);
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return null;
-        }
-
-        var presented = Convert.FromHexString(PermissionsConfigurationRules.HashKey(key));
-        PermissionsPrincipal? found = null;
-        foreach (var principal in configuration.Principals)
-        {
-            if (!principal.Enabled || principal.KeyHash.Length != 64)
-            {
-                continue;
-            }
-
-            // No early exit: every candidate is compared whether or not one has already matched, so
-            // the work done is the same for a key that matches the first principal and the last.
-            if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                    presented, Convert.FromHexString(principal.KeyHash)))
-            {
-                found ??= principal;
-            }
-        }
-
-        return found;
-    }
+    public PermissionsGrant? GrantsFor(string userId) =>
+        _configuration.Grants.FirstOrDefault(g => string.Equals(g.UserId, userId, StringComparison.Ordinal));
 }

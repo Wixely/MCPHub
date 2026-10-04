@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using MCPHub.Core.Users;
 using MCPHub.Proxy;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -7,30 +8,35 @@ using ModelContextProtocol.Protocol;
 namespace MCPHub.Core.Permissions;
 
 /// <summary>
-/// Reading and editing hub policy through the proxy, as <c>permissions__*</c> tools: who holds a key,
-/// what each may use, and — the one worth having — <b>why a particular tool is not available to a
-/// particular caller</b>.
+/// Reading and editing which tools each user may use, as <c>permissions__*</c> tools — and, the one
+/// worth having, <b>why a particular tool is not available to a particular user</b>.
 ///
-/// <para>Exposed as MCP tools rather than as a REST API because the hub already has exactly one
+/// <para>Identity is <c>users__*</c>'s business: creating a user and issuing its key happen there, so
+/// that one caller has one key for every surface. This deals only in grants.</para>
+///
+/// <para>Exposed as MCP tools rather than a REST API because the hub already has exactly one
 /// authenticated remote surface and this is it. A second listener would mean a second auth story to
 /// get right, and a management client already speaks MCP to reach anything else here.</para>
-///
-/// <para>Whether a caller gets these at all is <see cref="PermissionsManagementPolicy"/>'s decision;
-/// which of them it may call is an ordinary grant. This class only does the work.</para>
 /// </summary>
-/// <remarks>
-/// A key is returned exactly once, by <c>create_principal</c> and <c>rotate_key</c>. Nothing else ever
-/// yields one, because nothing else can: only hashes are stored. Principal listings carry a short
-/// fingerprint of the hash instead, which is enough to tell two keys apart in a support conversation
-/// and useless for authenticating.
-/// </remarks>
 public sealed class PermissionsToolProvider : ILocalToolProvider
 {
     /// <summary>Namespace key: tools appear as <c>permissions__*</c>.</summary>
     public const string ProviderKey = "permissions";
 
-    private const string PrincipalArgument = """
-        "principal": { "type": "string", "description": "Which principal: its id, or its name when that is unambiguous. See permissions__list_principals." }
+    /// <summary>Policy here cannot be edited because it is mounted read-only.</summary>
+    public const string ReadOnlyCode = "permissions.read_only";
+
+    /// <summary>The named user does not exist.</summary>
+    public const string NoSuchUserCode = "permissions.no_such_user";
+
+    /// <summary>A name matched more than one user, so the id is needed.</summary>
+    public const string AmbiguousUserCode = "permissions.ambiguous_user";
+
+    /// <summary>The stored document could not be loaded, so nothing is granted until it is repaired.</summary>
+    public const string UnreadableCode = "permissions.unreadable";
+
+    private const string UserArgument = """
+        "user": { "type": "string", "description": "Which user: its id, or its name when that is unambiguous. See users__list." }
         """;
 
     private static readonly IReadOnlyList<Tool> ToolDefinitions =
@@ -39,96 +45,61 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         {
             Name = "status",
             Description = "How this hub's tool policy is configured: whether unauthenticated callers are allowed, "
-                          + "whether policy can be edited here or is mounted read-only, how many principals exist, "
-                          + "and whether any switch is being pinned by an environment variable. Start here when a "
-                          + "tool is missing and you do not know why.",
+                          + "whether policy can be edited here or is mounted read-only, how many users exist and "
+                          + "how many have grants, and whether anything is self-defeating. Start here when a tool "
+                          + "is missing and you do not know why.",
             InputSchema = Schema("""{ "type": "object", "properties": {} }"""),
         },
         new Tool
         {
-            Name = "list_principals",
-            Description = "Every principal: id, name, whether it is enabled, its tool grants, and a short "
-                          + "fingerprint of its key. Keys themselves are not stored and cannot be listed.",
+            Name = "list_grants",
+            Description = "Every user's tool grants, with whether that user still exists and is enabled — a grant "
+                          + "on a suspended or deleted user applies to nothing, which is worth seeing.",
             InputSchema = Schema("""{ "type": "object", "properties": {} }"""),
         },
         new Tool
         {
             Name = "explain",
-            Description = "Why a tool is or is not available to a principal. Reports EVERY reason it is denied, "
-                          + "not just the first — a tool can be withheld by a missing grant and a feature switch at "
-                          + "the same time, and fixing one changes nothing. Each reason carries a stable code, what "
-                          + "to change, and the environment variable pinning it where one is.",
+            Description = "Why a tool is or is not available to a user. Reports EVERY reason it is denied, not "
+                          + "just the first — a tool can be withheld by a missing grant and a feature switch at "
+                          + "the same time, and fixing one changes nothing. Each reason carries a stable code, "
+                          + "what to change, and the environment variable pinning it where one is.",
             InputSchema = Schema($$"""
                 {
                   "type": "object",
                   "properties": {
-                    {{PrincipalArgument}},
-                    "tool": { "type": "string", "description": "The namespaced tool name, e.g. 'mcphub__install' or 'kodi__play_pause'." }
+                    {{UserArgument}},
+                    "tool": { "type": "string", "description": "The namespaced tool name, e.g. 'mcphub__install'." }
                   },
-                  "required": ["principal", "tool"]
+                  "required": ["user", "tool"]
                 }
-                """),
-        },
-        new Tool
-        {
-            Name = "create_principal",
-            Description = "Add a principal and issue its key. THE KEY IS RETURNED ONCE and cannot be recovered — "
-                          + "only its hash is stored. Grants may be exact tool names ('kodi__play_pause'), a whole "
-                          + "server ('kodi__*'), or everything ('*').",
-            InputSchema = Schema("""
-                {
-                  "type": "object",
-                  "properties": {
-                    "name": { "type": "string", "description": "What an operator will call this caller, e.g. an agent's nickname." },
-                    "tools": { "type": "array", "items": { "type": "string" }, "description": "Tool grants. Omit for a principal that may use nothing yet." }
-                  },
-                  "required": ["name"]
-                }
-                """),
-        },
-        new Tool
-        {
-            Name = "rotate_key",
-            Description = "Issue a new key for a principal, retiring the old one immediately. Returned once.",
-            InputSchema = Schema($$"""
-                { "type": "object", "properties": { {{PrincipalArgument}} }, "required": ["principal"] }
                 """),
         },
         new Tool
         {
             Name = "set_grants",
-            Description = "Replace a principal's tool grants wholesale. Takes effect on the principal's next call, "
-                          + "including one already connected.",
+            Description = "Replace a user's tool grants wholesale. Grants may be exact tool names "
+                          + "('kodi__play_pause'), a whole server ('kodi__*'), or everything ('*'). Takes effect on "
+                          + "that user's next call, including one already connected.",
             InputSchema = Schema($$"""
                 {
                   "type": "object",
                   "properties": {
-                    {{PrincipalArgument}},
-                    "tools": { "type": "array", "items": { "type": "string" }, "description": "The complete new set of grants; an empty array revokes everything." }
+                    {{UserArgument}},
+                    "tools": { "type": "array", "items": { "type": "string" }, "description": "The complete new set; an empty array revokes everything." }
                   },
-                  "required": ["principal", "tools"]
+                  "required": ["user", "tools"]
                 }
                 """),
         },
         new Tool
         {
-            Name = "set_enabled",
-            Description = "Suspend or restore a principal, keeping its grants either way. A suspended principal's "
-                          + "key stops working at once and is indistinguishable from an unknown one.",
+            Name = "clear_grants",
+            Description = "Remove a user's grant entry entirely. Use this to tidy an entry left behind by a "
+                          + "deleted user; for a user that still exists, set_grants with an empty array has the "
+                          + "same effect on what it may do.",
             InputSchema = Schema($$"""
-                {
-                  "type": "object",
-                  "properties": { {{PrincipalArgument}}, "enabled": { "type": "boolean" } },
-                  "required": ["principal", "enabled"]
-                }
-                """),
-        },
-        new Tool
-        {
-            Name = "delete_principal",
-            Description = "Remove a principal and retire its key. Use set_enabled to suspend one you may want back.",
-            InputSchema = Schema($$"""
-                { "type": "object", "properties": { {{PrincipalArgument}} }, "required": ["principal"] }
+                { "type": "object", "properties": { {{UserArgument}} }, "required": ["user"] }
                 """),
         },
         new Tool
@@ -143,40 +114,29 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         },
     ];
 
+    private readonly IUserDirectory _users;
     private readonly IPermissionsConfigurationSource _source;
     private readonly IToolAuthorization _effective;
     private readonly ILogger<PermissionsToolProvider> _logger;
 
-    /// <param name="source">Hub policy. A source that is not <see cref="IWritablePermissions"/> — a
-    /// mounted deployment file — makes the editing tools report <see cref="ReadOnlyCode"/> rather than
-    /// appear to succeed.</param>
     /// <param name="effective">The whole authorization stack, so <c>explain</c> answers the question an
-    /// operator actually asked: "why can this caller not use this tool", across every policy, not just
-    /// the grant half.</param>
+    /// operator actually asked — "why can this caller not use this tool" — across every policy rather
+    /// than the grant half.</param>
     public PermissionsToolProvider(
+        IUserDirectory users,
         IPermissionsConfigurationSource source,
         IToolAuthorization effective,
         ILogger<PermissionsToolProvider> logger)
     {
+        ArgumentNullException.ThrowIfNull(users);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(effective);
         ArgumentNullException.ThrowIfNull(logger);
+        _users = users;
         _source = source;
         _effective = effective;
         _logger = logger;
     }
-
-    /// <summary>Policy here cannot be edited because it is mounted read-only.</summary>
-    public const string ReadOnlyCode = "permissions.read_only";
-
-    /// <summary>The named principal does not exist.</summary>
-    public const string NoSuchPrincipalCode = "permissions.no_such_principal";
-
-    /// <summary>A name matched more than one principal, so the id is needed.</summary>
-    public const string AmbiguousPrincipalCode = "permissions.ambiguous_principal";
-
-    /// <summary>The stored document could not be loaded, so nothing is recognised until it is repaired.</summary>
-    public const string UnreadableCode = "permissions.unreadable";
 
     /// <inheritdoc />
     public string Key => ProviderKey;
@@ -196,13 +156,10 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
             return new ValueTask<CallToolResult>(toolName switch
             {
                 "status" => Status(),
-                "list_principals" => ListPrincipals(),
+                "list_grants" => ListGrants(),
                 "explain" => Explain(arguments),
-                "create_principal" => CreatePrincipal(arguments),
-                "rotate_key" => RotateKey(arguments),
                 "set_grants" => SetGrants(arguments),
-                "set_enabled" => SetEnabled(arguments),
-                "delete_principal" => DeletePrincipal(arguments),
+                "clear_grants" => ClearGrants(arguments),
                 "set_allow_unauthenticated" => SetAllowUnauthenticated(arguments),
                 _ => Failed("permissions.unknown_tool", $"Unknown permissions tool '{toolName}'."),
             });
@@ -211,14 +168,10 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         {
             return new ValueTask<CallToolResult>(Failed(ex.Code, ex.Message, ex.Remedy));
         }
-        catch (PermissionsNotFoundException ex)
-        {
-            return new ValueTask<CallToolResult>(Failed(NoSuchPrincipalCode, ex.Message));
-        }
         catch (ArgumentException ex)
         {
-            // Validation from the rules class: a grant that matches nothing, a name too long. The
-            // message is written for a person and carries no secret.
+            // Validation from the rules class: a grant that matches nothing, say. Written for a person
+            // and carrying no secret.
             return new ValueTask<CallToolResult>(Failed("permissions.invalid", ex.Message));
         }
         catch (InvalidOperationException ex)
@@ -238,47 +191,46 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
 
     private CallToolResult Status()
     {
-        var snapshot = _source.Snapshot;
+        var policy = _source.Snapshot;
+        var users = _users.Snapshot.Users;
+        var granted = policy.Grants.Count(g => users.Any(u => string.Equals(u.Id, g.UserId, StringComparison.Ordinal)));
+
         return Json(new PermissionsStatus
         {
-            AllowUnauthenticated = snapshot.AllowUnauthenticated,
-            KeysEnforced = !snapshot.AllowUnauthenticated,
+            AllowUnauthenticated = policy.AllowUnauthenticated,
+            KeysEnforced = !policy.AllowUnauthenticated,
             Editable = _source is IWritablePermissions,
-            PrincipalCount = snapshot.Principals.Length,
-            EnabledPrincipalCount = snapshot.Principals.Count(p => p.Enabled),
+            UserCount = users.Length,
+            EnabledUserCount = users.Count(u => u.Enabled),
+            GrantedUserCount = granted,
             LoadError = (_source as PermissionsStore)?.LoadError,
             ReloadError = (_source as PermissionsDeploymentSource)?.ReloadError,
-            Warning = snapshot is { AllowUnauthenticated: true, Principals.Length: > 0 }
-                ? $"{snapshot.Principals.Length} principal(s) exist, but unauthenticated callers are "
-                  + "allowed — so every caller is served as the single-user tenant and no grant has any "
-                  + "effect. Call permissions__set_allow_unauthenticated with allowed=false to start "
-                  + "enforcing keys."
+            Warning = policy is { AllowUnauthenticated: true } && users.Length > 0
+                ? $"{users.Length} user(s) exist, but unauthenticated callers are allowed — so every caller "
+                  + "is served as the single user and no grant has any effect. Call "
+                  + "permissions__set_allow_unauthenticated with allowed=false to start enforcing keys."
                 : null,
         }, PermissionsResultsJsonContext.Default.PermissionsStatus);
     }
 
-    private CallToolResult ListPrincipals() => Json(
-        new PermissionsPrincipalList
-        {
-            Principals = [.. _source.Snapshot.Principals.Select(Describe)],
-        },
-        PermissionsResultsJsonContext.Default.PermissionsPrincipalList);
+    private CallToolResult ListGrants() => Json(
+        new PermissionsGrantList { Grants = [.. _source.Snapshot.Grants.Select(Describe)] },
+        PermissionsResultsJsonContext.Default.PermissionsGrantList);
 
     /// <summary>
     /// The question an operator is actually asking, answered across the whole stack.
     ///
     /// <para>Deliberately not limited to grants. A tool can be withheld by a missing grant and a
-    /// feature switch simultaneously, so this reports every reason: grant it and the answer still
-    /// lists the switch, which is how somebody knows to keep going rather than conclude the grant
-    /// failed.</para>
+    /// feature switch simultaneously, so this reports every reason: grant it and the answer still lists
+    /// the switch, which is how somebody knows to keep going rather than conclude the grant failed.</para>
     /// </summary>
     private CallToolResult Explain(IReadOnlyDictionary<string, JsonElement>? arguments)
     {
-        var reference = Text(arguments, "principal");
+        var reference = Text(arguments, "user");
         var tool = Text(arguments, "tool");
-        var principal = FindPrincipal(reference);
+        var user = FindUser(reference);
         var serverKey = ServerKeyOf(tool);
-        var tenant = new TenantContext(principal.Id);
+        var tenant = new TenantContext(user.Id);
 
         var denials = _effective is CompositeToolAuthorization composite
             ? composite.ExplainAll(tenant, serverKey, tool)
@@ -286,17 +238,18 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
 
         return Json(new PermissionsExplanation
         {
-            Principal = Describe(principal),
+            UserId = user.Id,
+            UserName = user.Name,
             Tool = tool,
             ServerKey = serverKey,
             Available = denials.Count == 0,
-            Denials = [.. denials.Select(d => new PermissionsDenial
-            {
-                Code = d.Code,
-                Reason = d.Reason,
-                Remedy = d.Remedy,
-                PinnedBy = d.PinnedBy,
-            })],
+            Denials =
+            [
+                .. denials.Select(d => new PermissionsDenial
+                {
+                    Code = d.Code, Reason = d.Reason, Remedy = d.Remedy, PinnedBy = d.PinnedBy,
+                }),
+            ],
         }, PermissionsResultsJsonContext.Default.PermissionsExplanation);
     }
 
@@ -321,63 +274,39 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
 
     // ---- editing --------------------------------------------------------------------------------
 
-    private CallToolResult CreatePrincipal(IReadOnlyDictionary<string, JsonElement>? arguments)
-    {
-        var store = Writable();
-        var (principal, key) = store.CreatePrincipal(Text(arguments, "name"), Grants(arguments, "tools", required: false));
-        return Json(new PermissionsKeyIssued
-        {
-            Principal = Describe(principal),
-            Key = key,
-            Notice = "This key is shown once and is not recoverable. Store it now; a lost key is rotated, not looked up.",
-        }, PermissionsResultsJsonContext.Default.PermissionsKeyIssued);
-    }
-
-    private CallToolResult RotateKey(IReadOnlyDictionary<string, JsonElement>? arguments)
-    {
-        var store = Writable();
-        var principal = FindPrincipal(Text(arguments, "principal"));
-        var key = store.RotateKey(principal.Id);
-        return Json(new PermissionsKeyIssued
-        {
-            Principal = Describe(principal),
-            Key = key,
-            Notice = "The previous key stopped working the moment this one was issued.",
-        }, PermissionsResultsJsonContext.Default.PermissionsKeyIssued);
-    }
-
     private CallToolResult SetGrants(IReadOnlyDictionary<string, JsonElement>? arguments)
     {
         var store = Writable();
 
         // Every argument read before anything is looked up, so a malformed call is reported as
-        // malformed. Resolving first would answer "no such principal" to a caller who also forgot an
+        // malformed. Resolving first would answer "no such user" to a caller who also forgot an
         // argument, sending them after the wrong mistake.
-        var reference = Text(arguments, "principal");
-        var tools = Grants(arguments, "tools", required: true);
-        var principal = FindPrincipal(reference);
-        store.SetGrants(principal.Id, tools);
-        return Changed($"'{principal.Name}' now holds {tools.Count} grant(s).", store, principal.Id);
+        var reference = Text(arguments, "user");
+        var tools = Grants(arguments, "tools");
+        var user = FindUser(reference);
+        store.SetGrants(user.Id, tools);
+        return Changed($"'{user.Name}' now holds {tools.Count} grant(s).", store, user.Id);
     }
 
-    private CallToolResult SetEnabled(IReadOnlyDictionary<string, JsonElement>? arguments)
+    private CallToolResult ClearGrants(IReadOnlyDictionary<string, JsonElement>? arguments)
     {
         var store = Writable();
-        var reference = Text(arguments, "principal");
-        var enabled = Flag(arguments, "enabled");
-        var principal = FindPrincipal(reference);
-        store.SetEnabled(principal.Id, enabled);
-        return Changed(
-            enabled ? $"'{principal.Name}' is enabled again." : $"'{principal.Name}' is suspended; its key no longer works.",
-            store, principal.Id);
-    }
+        var reference = Text(arguments, "user");
 
-    private CallToolResult DeletePrincipal(IReadOnlyDictionary<string, JsonElement>? arguments)
-    {
-        var store = Writable();
-        var principal = FindPrincipal(Text(arguments, "principal"));
-        store.DeletePrincipal(principal.Id);
-        return Changed($"'{principal.Name}' is gone and its key is retired.", store, principal: null);
+        // Resolved against the grants as well as the directory, because the point of this tool is to
+        // tidy an entry whose user has gone — insisting the user exist would refuse exactly that.
+        var userId = _users.Snapshot.Users
+                         .FirstOrDefault(u => string.Equals(u.Id, reference, StringComparison.Ordinal)
+                                              || string.Equals(u.Name, reference, StringComparison.OrdinalIgnoreCase))?.Id
+                     ?? _source.Snapshot.Grants
+                         .FirstOrDefault(g => string.Equals(g.UserId, reference, StringComparison.Ordinal))?.UserId
+                     ?? throw new PermissionsArgumentException(
+                         NoSuchUserCode,
+                         $"No user or grant entry matches '{reference}'.",
+                         "Call permissions__list_grants to see what exists.");
+
+        store.ForgetUser(userId);
+        return Changed($"Grants for '{reference}' removed.", store, forUser: null);
     }
 
     private CallToolResult SetAllowUnauthenticated(IReadOnlyDictionary<string, JsonElement>? arguments)
@@ -389,7 +318,7 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
             allowed
                 ? "Callers with no recognised key may now use every tool."
                 : "Callers with no recognised key now get nothing.",
-            store, principal: null);
+            store, forUser: null);
     }
 
     // ---- plumbing -------------------------------------------------------------------------------
@@ -397,9 +326,9 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
     /// <summary>
     /// The store, or a named refusal when policy is mounted read-only.
     ///
-    /// <para>This is the failure most likely to waste somebody's afternoon: a management UI issues a
-    /// grant against a container whose policy is a mounted file, the call appears to work, and nothing
-    /// changes. Saying so by code lets the UI grey the controls instead.</para>
+    /// <para>This is the failure most likely to waste somebody's afternoon: a client issues a grant
+    /// against a container whose policy is a mounted file, the call appears to work, and nothing
+    /// changes. Saying so by code lets a UI grey the controls instead.</para>
     /// </summary>
     private IWritablePermissions Writable() =>
         _source as IWritablePermissions
@@ -409,64 +338,59 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
             "Edit the permissions document the hub was given, or run it with an editable store.");
 
     /// <summary>
-    /// A principal by id, or by name when that is unambiguous. Ambiguity is refused rather than
-    /// resolved arbitrarily: picking one of two principals called "agent" would edit the wrong policy
-    /// and report success.
+    /// A user by id, or by name when that is unambiguous. Ambiguity is refused rather than resolved:
+    /// granting the wrong one of two users called "agent" and reporting success is worse than refusing.
     /// </summary>
-    private PermissionsPrincipal FindPrincipal(string reference)
+    private HubUser FindUser(string reference)
     {
-        var principals = _source.Snapshot.Principals;
-        var byId = principals.FirstOrDefault(p => string.Equals(p.Id, reference, StringComparison.Ordinal));
-        if (byId is not null)
+        var users = _users.Snapshot.Users;
+        if (users.FirstOrDefault(u => string.Equals(u.Id, reference, StringComparison.Ordinal)) is { } byId)
         {
             return byId;
         }
 
-        var byName = principals
-            .Where(p => string.Equals(p.Name, reference, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
+        var byName = users.Where(u => string.Equals(u.Name, reference, StringComparison.OrdinalIgnoreCase)).ToList();
         return byName.Count switch
         {
             1 => byName[0],
             0 => throw new PermissionsArgumentException(
-                NoSuchPrincipalCode,
-                $"No principal has the id or name '{reference}'.",
-                "Call permissions__list_principals to see what exists."),
+                NoSuchUserCode,
+                $"No user has the id or name '{reference}'.",
+                "Call users__list to see what exists."),
             _ => throw new PermissionsArgumentException(
-                AmbiguousPrincipalCode,
-                $"{byName.Count} principals are called '{reference}'.",
-                "Use the principal's id instead of its name."),
+                AmbiguousUserCode,
+                $"{byName.Count} users are called '{reference}'.",
+                "Use the user's id instead of its name."),
         };
     }
 
-    /// <summary>The server key a namespaced tool belongs to — what the authorization stack is asked
-    /// about. A name with no separator is its own key, which is what an operator typing a bare tool
-    /// name means.</summary>
+    /// <summary>The server key a namespaced tool belongs to. A name with no separator is its own key,
+    /// which is what an operator typing a bare tool name means.</summary>
     private static string ServerKeyOf(string exposedToolName)
     {
         var at = exposedToolName.IndexOf(ProxyConstants.NamespaceSeparator, StringComparison.Ordinal);
         return at > 0 ? exposedToolName[..at] : exposedToolName;
     }
 
-    private static PermissionsPrincipalSummary Describe(PermissionsPrincipal principal) => new()
+    private PermissionsGrantSummary Describe(PermissionsGrant grant)
     {
-        Id = principal.Id,
-        Name = principal.Name,
-        Enabled = principal.Enabled,
-        Tools = [.. principal.Tools],
+        var user = _users.Snapshot.Users
+            .FirstOrDefault(u => string.Equals(u.Id, grant.UserId, StringComparison.Ordinal));
+        return new PermissionsGrantSummary
+        {
+            UserId = grant.UserId,
+            UserName = user?.Name ?? string.Empty,
+            UserEnabled = user?.Enabled ?? false,
+            UserExists = user is not null,
+            Tools = [.. grant.Tools],
+        };
+    }
 
-        // Enough to tell two keys apart when somebody says "the key I gave Banter", and useless for
-        // authenticating with. The whole hash would be a verifier for anyone who could list it.
-        KeyFingerprint = principal.KeyHash.Length >= 8 ? principal.KeyHash[..8] : principal.KeyHash,
-    };
-
-    private CallToolResult Changed(string message, IWritablePermissions store, string? principal)
+    private CallToolResult Changed(string message, IWritablePermissions store, string? forUser)
     {
-        var updated = principal is null
-            ? null
-            : store.Snapshot.Principals.FirstOrDefault(p => string.Equals(p.Id, principal, StringComparison.Ordinal));
-        return Json(new PermissionsChange { Message = message, Principal = updated is null ? null : Describe(updated) },
+        var grant = forUser is null ? null : store.GrantsFor(forUser);
+        return Json(
+            new PermissionsChange { Message = message, Grant = grant is null ? null : Describe(grant) },
             PermissionsResultsJsonContext.Default.PermissionsChange);
     }
 
@@ -492,17 +416,9 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         return value.GetBoolean();
     }
 
-    private static IReadOnlyList<string> Grants(
-        IReadOnlyDictionary<string, JsonElement>? arguments, string name, bool required)
+    private static IReadOnlyList<string> Grants(IReadOnlyDictionary<string, JsonElement>? arguments, string name)
     {
-        if (arguments is null || !arguments.TryGetValue(name, out var value) || value.ValueKind == JsonValueKind.Null)
-        {
-            return required
-                ? throw new PermissionsArgumentException("permissions.bad_argument", $"'{name}' is required.")
-                : [];
-        }
-
-        if (value.ValueKind != JsonValueKind.Array)
+        if (arguments is null || !arguments.TryGetValue(name, out var value) || value.ValueKind != JsonValueKind.Array)
         {
             throw new PermissionsArgumentException("permissions.bad_argument", $"'{name}' must be an array of strings.");
         }
@@ -532,9 +448,8 @@ public sealed class PermissionsToolProvider : ILocalToolProvider
         new() { Content = [new TextContentBlock { Text = JsonSerializer.Serialize(value, typeInfo) }] };
 
     /// <summary>
-    /// A failure a caller can act on: a stable code, what is wrong, and what to change. Serialised as
-    /// JSON rather than a bare sentence so a management UI can branch on the code instead of matching
-    /// prose that may be reworded.
+    /// A failure a caller can act on: a stable code, what is wrong, and what to change. JSON rather
+    /// than a bare sentence so a client can branch on the code instead of matching prose.
     /// </summary>
     private static CallToolResult Failed(string code, string reason, string? remedy = null) => new()
     {

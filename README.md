@@ -150,22 +150,32 @@ Two checkboxes at the top of the page decide what agents may do. They take effec
 
 The environment variables win over the checkboxes when set (`true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`), so a container can pin the policy with `-e MCPHUB_RECIPES_AGENT_EDIT=false`; the page then shows the checkbox locked and says which variable is pinning it.
 
-### Permissions
+### Users
 
-Who may use the proxy, and which of its tools. By default nobody needs a key: MCPHub binds loopback, every caller is the single user, and all tools are visible — which is how it has always worked on your own machine. Turn on **Require a key** and that changes: a caller with no key is refused, and each key sees only what its principal is granted.
+Who may use this hub. One user, one key: a caller is created once here and then selected on the Permissions page, rather than being set up again — with a key that could never match — on every page that needs to know who is calling. The Model Router still keeps its own inputs; folding those onto these users is the next step.
 
-Add a principal and MCPHub issues its key, **shown once**. Only the hash is stored, so a lost key is rotated rather than looked up; the list shows the first eight characters of the hash, which is enough to tell two keys apart and no use for getting in. Suspending a principal keeps its grants and stops its key at once — to the caller it is indistinguishable from a key that was never issued.
+By default nobody needs a key: MCPHub binds loopback, every caller is the single user, and all tools are visible — which is how it has always worked on your own machine. Turn on **Require a key** and that changes: a caller presenting no key is refused, and a caller presenting one sees only what that user is granted on the Permissions page.
 
-A grant is an exact tool name (`kodi__play_pause`), every tool of one server (`kodi__*`), or everything (`*`). Use `*` only for an application you trust to administer the hub: it covers servers that are not installed yet, which is what makes installing possible, and it covers the permission tools too.
+Add a user and MCPHub issues its key, **shown once**. Only the hash is stored, so a lost key is rotated rather than looked up; the list shows the first eight characters of the hash, which is enough to tell two keys apart and no use for getting in. Rotating takes effect immediately and retires the previous key everywhere.
+
+Suspending is the one switch that stops everything: the user keeps its name and its grants and its key stops being recognised, on every surface, at once. To the caller it is indistinguishable from a key that was never issued, and enabling it again restores exactly what it had. Removing a user retires its key and drops its tool grants with it, so nothing is left granting tools to an id nobody holds.
 
 | Switch | Does | Headless / Docker flag |
 | --- | --- | --- |
-| **Require a key** | Refuses callers that present no key; each key is resolved to one principal and sees only its grants. Off, every caller is the single user. | Set in the permissions document |
-| **Let callers manage these permissions through the proxy** | Exposes `permissions__*` so another application can administer this policy. **Off by default** — these tools govern every other tool, so a caller holding them can grant itself anything. | `MCPHUB_PERMISSIONS_MANAGEMENT_ENABLED=true` |
+| **Require a key** | Refuses callers that present no key; each key resolves to one user, which sees only its grants. Off, every caller is the single user and gets everything. | Set in the permissions document |
+| **Let callers administer this hub through the proxy** | Exposes `users__*` and `permissions__*` so another application can manage identity and policy. **Off by default** — these tools govern every other tool, so a caller holding them can issue itself a key and grant itself anything. | `MCPHUB_ADMINISTRATION_ENABLED=true` |
 
-**Why can this caller not use a tool?** The box at the bottom of the page answers it. Tool access is decided by several independent things at once — the principal's grants, whether agent management is on, whether the capability beneath it is on, and whether an environment variable is pinning any of them — so a tool can be withheld for more than one reason. Name a principal and a tool and every reason is listed, each with what to change and the variable forcing it where one is. Without that, granting a tool and seeing no change looks like the grant failed, when a switch was also off all along.
+A warning appears when users exist while a key is not required: their grants are inert, because every caller is being served as the single user and getting everything regardless. It is a reasonable state to pass through while setting a hub up and never one to stay in.
 
-A warning appears when principals exist while a key is not required: the grants are inert, because every caller is being served as the single user and getting everything regardless. It is a reasonable state to pass through while setting a hub up and never one to stay in.
+### Permissions
+
+Which tools each user may use. Identity is the Users page's business; this page is grants only, and a user with no grants may use no tools — absence is the default so that issuing a key is not the same act as handing over the hub.
+
+A grant is an exact tool name (`kodi__play_pause`), every tool of one server (`kodi__*`), or everything (`*`). Use `*` only for an application you trust to administer the hub: it covers servers that are not installed yet, which is what makes installing possible, and it covers the administration tools too.
+
+Every user is listed whether or not it holds grants, because somebody with a key and nothing granted is exactly the case worth seeing. A user suspended on the Users page is flagged here as well — its grants are real and apply to nothing until it is enabled.
+
+**Why can this caller not use a tool?** The box at the bottom of the page answers it. Tool access is decided by several independent things at once — the user's grants, whether it is suspended, whether agent management is on, whether the capability beneath it is on, and whether an environment variable is pinning any of them — so a tool can be withheld for more than one reason. Name a user and a tool and every reason is listed, each with what to change and the variable forcing it where one is. Without that, granting a tool and seeing no change looks like the grant failed, when a switch was also off all along.
 
 ### Agent
 

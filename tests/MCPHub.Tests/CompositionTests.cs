@@ -2,6 +2,7 @@ using MCPHub.App;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Management;
 using MCPHub.Core.Permissions;
+using MCPHub.Core.Users;
 using MCPHub.Core.Recipes;
 using MCPHub.Proxy;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,7 +57,7 @@ public sealed class CompositionTests
         var policies = provider.GetRequiredService<CompositeToolAuthorization>().Policies;
 
         Assert.Contains(policies, p => p is PermissionsToolAuthorization);
-        Assert.Contains(policies, p => p is PermissionsManagementPolicy);
+        Assert.Contains(policies, p => p is AdministrationPolicy);
 
         // The ones that were already there must still be, since the composite is an AND and dropping
         // one would widen access rather than narrow it.
@@ -84,5 +85,34 @@ public sealed class CompositionTests
         var permissions = Assert.Single(providers.OfType<PermissionsToolProvider>().ToList());
         Assert.Equal("permissions", permissions.Key);
         Assert.NotEmpty(permissions.Tools);
+
+        // And identity with them: granting a user tools from another process is no use if the user
+        // itself can only be created by somebody sitting at the desktop.
+        var users = Assert.Single(providers.OfType<UserToolProvider>().ToList());
+        Assert.Equal("users", users.Key);
+        Assert.NotEmpty(users.Tools);
+    }
+
+    /// <summary>
+    /// One directory, one key. Both pages and both tool providers have to be reading the same store —
+    /// two instances would be two sets of users, which is the drift this whole split exists to end.
+    /// </summary>
+    [Fact]
+    public void Everything_that_resolves_a_key_shares_one_user_directory()
+    {
+        using var directory = new TempDir();
+        var services = new ServiceCollection();
+        Composition.ConfigureServices(services);
+        services.AddSingleton<IAppPaths>(new FakeAppPaths(directory.Path));
+
+        using var provider = services.BuildServiceProvider();
+
+        var store = provider.GetRequiredService<UserStore>();
+        Assert.Same(store, provider.GetRequiredService<IUserDirectory>());
+        Assert.Same(store, provider.GetRequiredService<IWritableUsers>());
+
+        var permissions = provider.GetRequiredService<PermissionsStore>();
+        Assert.Same(permissions, provider.GetRequiredService<IPermissionsConfigurationSource>());
+        Assert.Same(permissions, provider.GetRequiredService<IWritablePermissions>());
     }
 }

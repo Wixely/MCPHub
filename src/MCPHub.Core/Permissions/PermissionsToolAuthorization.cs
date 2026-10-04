@@ -1,3 +1,4 @@
+using MCPHub.Core.Users;
 using MCPHub.Proxy;
 
 namespace MCPHub.Core.Permissions;
@@ -21,10 +22,17 @@ namespace MCPHub.Core.Permissions;
 public sealed class PermissionsToolAuthorization : IToolAuthorization, IToolAuthorizationDiagnostics
 {
     private readonly IPermissionsConfigurationSource _source;
+    private readonly IUserDirectory _users;
 
-    public PermissionsToolAuthorization(IPermissionsConfigurationSource source)
+    /// <param name="users">Who the caller is, and whether it is still allowed in. Asked on every call
+    /// rather than trusted from the handshake, so suspending or deleting a user takes effect at once
+    /// instead of when it next reconnects.</param>
+    /// <param name="source">What that user may use.</param>
+    public PermissionsToolAuthorization(IUserDirectory users, IPermissionsConfigurationSource source)
     {
+        ArgumentNullException.ThrowIfNull(users);
         ArgumentNullException.ThrowIfNull(source);
+        _users = users;
         _source = source;
     }
 
@@ -36,16 +44,16 @@ public sealed class PermissionsToolAuthorization : IToolAuthorization, IToolAuth
     public bool IsCallAllowed(TenantContext tenant, string serverKey, string exposedToolName) =>
         Allowed(tenant, serverKey, exposedToolName);
 
-    /// <summary>No principal for the tenant and unauthenticated callers are refused.</summary>
+    /// <summary>No user for the tenant, and unauthenticated callers are refused.</summary>
     public const string UnauthenticatedCode = "permissions.unauthenticated";
 
-    /// <summary>The tenant does not match any principal — typically one deleted mid-session.</summary>
-    public const string UnknownPrincipalCode = "permissions.unknown_principal";
+    /// <summary>The tenant does not match any user — typically one deleted mid-session.</summary>
+    public const string UnknownUserCode = "permissions.unknown_user";
 
-    /// <summary>The principal exists but is switched off.</summary>
-    public const string PrincipalDisabledCode = "permissions.principal_disabled";
+    /// <summary>The user exists but is suspended.</summary>
+    public const string UserDisabledCode = "permissions.user_disabled";
 
-    /// <summary>The principal is live, but nothing in its grants covers this tool.</summary>
+    /// <summary>The user is live, but nothing in its grants covers this tool.</summary>
     public const string NoGrantCode = "permissions.no_grant";
 
     /// <inheritdoc />
@@ -60,43 +68,42 @@ public sealed class PermissionsToolAuthorization : IToolAuthorization, IToolAuth
             return null;
         }
 
-        var configuration = _source.Snapshot;
-        var principal = configuration.Principals.FirstOrDefault(
-            p => string.Equals(p.Id, tenant.TenantId, StringComparison.Ordinal));
+        var user = _users.Snapshot.Users
+            .FirstOrDefault(u => string.Equals(u.Id, tenant.TenantId, StringComparison.Ordinal));
 
-        if (principal is null)
+        if (user is null)
         {
             return tenant.IsDefault
                 ? new ToolDenial
                 {
                     Code = UnauthenticatedCode,
-                    Reason = "The caller presented no key that resolves to a principal, and this hub "
-                             + "refuses unauthenticated callers.",
-                    Remedy = "Issue the caller a key, or set AllowUnauthenticated to allow anonymous use.",
+                    Reason = "The caller presented no key that resolves to a user, and this hub refuses "
+                             + "unauthenticated callers.",
+                    Remedy = "Issue the caller a key, or allow unauthenticated callers.",
                 }
                 : new ToolDenial
                 {
-                    Code = UnknownPrincipalCode,
-                    Reason = $"No principal has the id '{tenant.TenantId}'.",
-                    Remedy = "The principal was probably deleted while the caller was connected. "
-                             + "Re-create it, or have the caller reconnect with a current key.",
+                    Code = UnknownUserCode,
+                    Reason = $"No user has the id '{tenant.TenantId}'.",
+                    Remedy = "The user was probably deleted while the caller was connected. Re-create it, "
+                             + "or have the caller reconnect with a current key.",
                 };
         }
 
-        if (!principal.Enabled)
+        if (!user.Enabled)
         {
             return new ToolDenial
             {
-                Code = PrincipalDisabledCode,
-                Reason = $"Principal '{principal.Name}' is disabled, so none of its grants apply.",
-                Remedy = "Enable the principal.",
+                Code = UserDisabledCode,
+                Reason = $"User '{user.Name}' is suspended, so none of its grants apply.",
+                Remedy = "Enable the user.",
             };
         }
 
         return new ToolDenial
         {
             Code = NoGrantCode,
-            Reason = $"Principal '{principal.Name}' holds no grant covering '{exposedToolName}'.",
+            Reason = $"User '{user.Name}' holds no grant covering '{exposedToolName}'.",
             Remedy = $"Grant '{exposedToolName}', or '{serverKey}"
                      + $"{PermissionsConfigurationRules.ServerWildcardSuffix}' for the whole server.",
         };
@@ -111,21 +118,25 @@ public sealed class PermissionsToolAuthorization : IToolAuthorization, IToolAuth
     private bool Allowed(TenantContext tenant, string serverKey, string exposedToolName)
     {
         ArgumentNullException.ThrowIfNull(tenant);
-        var configuration = _source.Snapshot;
 
-        // The id the authenticator resolved, matched back to a principal. Matching by id rather than
-        // re-hashing a key: the proxy never sees the key again after the handshake, and it should not
-        // have to.
-        foreach (var principal in configuration.Principals)
+        // Matched by the id the authenticator resolved, not by re-checking a key: the proxy never sees
+        // the key again after the handshake, and it should not have to.
+        var user = _users.Snapshot.Users
+            .FirstOrDefault(u => string.Equals(u.Id, tenant.TenantId, StringComparison.Ordinal));
+
+        if (user is null)
         {
-            if (string.Equals(principal.Id, tenant.TenantId, StringComparison.Ordinal))
-            {
-                return PermissionsConfigurationRules.Grants(principal, serverKey, exposedToolName);
-            }
+            // Either nothing authenticated this caller, or its user was deleted mid-session — and a
+            // deleted user must not keep working until it reconnects.
+            return _source.Snapshot.AllowUnauthenticated && tenant.IsDefault;
         }
 
-        // No principal for this tenant. Either nothing authenticated it, or its principal was deleted
-        // mid-session — and a deleted principal must not keep working until it reconnects.
-        return configuration.AllowUnauthenticated && tenant.IsDefault;
+        if (!user.Enabled)
+        {
+            return false;
+        }
+
+        return _source.GrantsFor(user.Id) is { } grant
+               && PermissionsConfigurationRules.Covers(grant, serverKey, exposedToolName);
     }
 }

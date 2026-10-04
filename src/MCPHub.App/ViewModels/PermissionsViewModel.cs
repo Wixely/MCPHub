@@ -4,63 +4,53 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.Core.Permissions;
-using MCPHub.Core.Settings;
+using MCPHub.Core.Users;
 using MCPHub.Proxy;
 
 namespace MCPHub.App.ViewModels;
 
-/// <summary>One principal as the list shows it.</summary>
-public sealed class PermissionsPrincipalRow
+/// <summary>A user as the list shows it, with what it is currently granted.</summary>
+public sealed class GrantRow
 {
-    public PermissionsPrincipalRow(PermissionsPrincipal principal)
+    public GrantRow(HubUser user, PermissionsGrant? grant)
     {
-        Principal = principal;
-        Name = principal.Name.Length > 0 ? principal.Name : "(unnamed)";
-        State = principal.Enabled ? "Enabled" : "Suspended";
-        GrantSummary = principal.Tools.Length == 0
+        Id = user.Id;
+        Name = user.Name.Length > 0 ? user.Name : "(unnamed)";
+        Enabled = user.Enabled;
+        State = user.Enabled ? "Enabled" : "Suspended";
+        Tools = grant?.Tools ?? [];
+        Summary = Tools.Length == 0
             ? "No tools"
-            : principal.Tools.Contains(PermissionsConfigurationRules.EverythingGrant)
+            : Tools.Contains(PermissionsConfigurationRules.EverythingGrant)
                 ? "Every tool"
-                : string.Join(", ", principal.Tools);
-
-        // The hash's first characters, so two keys can be told apart in a conversation without the
-        // list being something worth stealing.
-        KeyFingerprint = principal.KeyHash.Length >= 8 ? principal.KeyHash[..8] : principal.KeyHash;
+                : string.Join(", ", Tools);
     }
 
-    public PermissionsPrincipal Principal { get; }
-
-    public string Id => Principal.Id;
+    public string Id { get; }
 
     public string Name { get; }
 
+    public bool Enabled { get; }
+
     public string State { get; }
 
-    public string GrantSummary { get; }
+    public string[] Tools { get; }
 
-    public string KeyFingerprint { get; }
+    public string Summary { get; }
 }
 
 /// <summary>One reason a tool is unavailable, as the Explain panel shows it.</summary>
-public sealed class PermissionsDenialRow
+public sealed class PermissionsDenialRow(ToolDenial denial)
 {
-    public PermissionsDenialRow(ToolDenial denial)
-    {
-        Code = denial.Code;
-        Reason = denial.Reason;
-        Remedy = denial.Remedy ?? string.Empty;
-        PinnedBy = denial.PinnedBy ?? string.Empty;
-    }
+    public string Code { get; } = denial.Code;
 
-    public string Code { get; }
+    public string Reason { get; } = denial.Reason;
 
-    public string Reason { get; }
-
-    public string Remedy { get; }
+    public string Remedy { get; } = denial.Remedy ?? string.Empty;
 
     /// <summary>The environment variable forcing this, when one is. Shown prominently because it is the
     /// reason a checkbox will not stay where it is put.</summary>
-    public string PinnedBy { get; }
+    public string PinnedBy { get; } = denial.PinnedBy ?? string.Empty;
 
     public bool HasRemedy => Remedy.Length > 0;
 
@@ -68,252 +58,116 @@ public sealed class PermissionsDenialRow
 }
 
 /// <summary>
-/// Who may use the proxy, and which of its tools.
+/// Which tools each user may use.
 ///
-/// <para>Shaped after the Router page, which solves the same problems: a list of keyed callers, an
-/// editor beside it, and a key that can be shown exactly once. The one thing here that page does not
-/// need is <b>Explain</b> — tool access is decided by several independent policies at once, so "the
-/// tool is missing" has more than one possible cause and an operator cannot see them from a list.</para>
+/// <para>Grants only — users and their keys are on the Users page, because one caller has one identity
+/// across every surface. A user with no grants may use no tools, which is why absence is the default
+/// rather than something to configure.</para>
+///
+/// <para>The panel at the bottom is why the page is not just a list. Tool access is decided by several
+/// independent policies at once, so "the tool is missing" has more than one possible cause and no list
+/// can show that.</para>
 /// </summary>
 public sealed partial class PermissionsViewModel : ViewModelBase
 {
-    private readonly PermissionsStore _store;
-    private readonly ISettingsStore _settings;
-    private readonly PermissionsManagementPolicy _managementPolicy;
+    private readonly UserStore _users;
+    private readonly PermissionsStore _permissions;
     private readonly CompositeToolAuthorization _authorization;
 
-    /// <summary>True while Refresh is loading the switches, so their change handlers do not write back
-    /// what they have just read. The same guard SettingsViewModel uses, for the same reason.</summary>
-    private bool _loading;
-
     [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _keysEnforced;
-    [ObservableProperty] private bool _manageThroughProxy;
-    [ObservableProperty] private PermissionsPrincipalRow? _selectedPrincipal;
-    [ObservableProperty] private string _principalName = string.Empty;
-    [ObservableProperty] private bool _principalEnabled = true;
-    [ObservableProperty] private string _principalGrants = string.Empty;
-    [ObservableProperty] private bool _isEditorOpen;
-    [ObservableProperty] private string _generatedKey = string.Empty;
-    [ObservableProperty] private string _generatedKeyNotice = string.Empty;
+    [ObservableProperty] private GrantRow? _selectedUser;
+    [ObservableProperty] private string _grants = string.Empty;
     [ObservableProperty] private string _explainTool = string.Empty;
     [ObservableProperty] private string _explainSummary = string.Empty;
 
     public PermissionsViewModel(
-        PermissionsStore store,
-        ISettingsStore settings,
-        PermissionsManagementPolicy managementPolicy,
-        CompositeToolAuthorization authorization)
+        UserStore users, PermissionsStore permissions, CompositeToolAuthorization authorization)
     {
-        _store = store;
-        _settings = settings;
-        _managementPolicy = managementPolicy;
+        _users = users;
+        _permissions = permissions;
         _authorization = authorization;
         Refresh();
     }
 
-    public ObservableCollection<PermissionsPrincipalRow> Principals { get; } = [];
+    public ObservableCollection<GrantRow> Rows { get; } = [];
 
     public ObservableCollection<PermissionsDenialRow> Denials { get; } = [];
 
-    public bool HasPrincipals => Principals.Count > 0;
+    public bool HasRows => Rows.Count > 0;
 
-    public bool HasNoPrincipals => Principals.Count == 0;
+    public bool HasNoRows => Rows.Count == 0;
 
-    public bool HasPrincipalSelected => SelectedPrincipal is not null;
-
-    public bool HasGeneratedKey => GeneratedKey.Length > 0;
+    public bool HasUserSelected => SelectedUser is not null;
 
     public bool HasDenials => Denials.Count > 0;
 
     public bool HasExplanation => ExplainSummary.Length > 0;
 
-    public string EditorTitle =>
-        SelectedPrincipal is { } row ? $"Edit principal: {row.Name}" : "Add principal";
+    public string EditorTitle => SelectedUser is { } row ? $"Grants for {row.Name}" : "Select a user";
 
-    public string SaveText => HasPrincipalSelected ? "Save changes" : "Add principal and generate key";
-
-    /// <summary>
-    /// Why the stored document could not be read, if it could not. While this is set nothing is
-    /// recognised and every save throws, so the page has to say so outright — otherwise Add looks
-    /// simply broken.
-    /// </summary>
-    public string? ConfigurationError => _store.LoadError;
+    /// <summary>Why the stored document could not be read, if it could not. Nothing is granted while
+    /// this is set and every save throws, so the page says so outright.</summary>
+    public string? ConfigurationError => _permissions.LoadError;
 
     public bool HasConfigurationError => ConfigurationError is not null;
 
     /// <summary>
-    /// The state worth shouting about: principals exist and keys are not being checked, so every
-    /// caller is served as the single-user tenant and no grant has any effect. Legitimate to pass
-    /// through while setting a hub up, never somewhere to stay — and invisible from the list alone,
-    /// which shows principals looking perfectly configured.
+    /// Set when the selected user is suspended: its grants are real and apply to nothing, which is
+    /// worth saying on the page that edits them rather than leaving somebody to wonder why a grant
+    /// changed nothing.
     /// </summary>
-    public string? Warning => !KeysEnforced && Principals.Count > 0
-        ? $"{Principals.Count} principal(s) are configured, but keys are not being enforced — so every "
-          + "caller is treated as the single user and gets every tool. Turn on \"Require a key\" to make "
-          + "these grants mean anything."
+    public string? SelectedUserWarning => SelectedUser is { Enabled: false } row
+        ? $"'{row.Name}' is suspended on the Users page, so none of these grants apply until it is enabled."
         : null;
 
-    public bool HasWarning => Warning is not null;
+    public bool HasSelectedUserWarning => SelectedUserWarning is not null;
 
-    /// <summary>Set when an environment variable is pinning the proxy-management switch, so the
-    /// checkbox is shown locked rather than appearing not to save.</summary>
-    public string? ManageThroughProxyPinnedBy => _managementPolicy.OverrideSource;
-
-    public bool IsManageThroughProxyPinned => ManageThroughProxyPinnedBy is not null;
-
-    public bool CanEditManageThroughProxy => !IsManageThroughProxyPinned;
-
-    partial void OnSelectedPrincipalChanged(PermissionsPrincipalRow? value)
+    partial void OnSelectedUserChanged(GrantRow? value)
     {
-        OnPropertyChanged(nameof(HasPrincipalSelected));
+        OnPropertyChanged(nameof(HasUserSelected));
         OnPropertyChanged(nameof(EditorTitle));
-        OnPropertyChanged(nameof(SaveText));
-        if (value is { } row)
-        {
-            PrincipalName = row.Principal.Name;
-            PrincipalEnabled = row.Principal.Enabled;
-            PrincipalGrants = string.Join(Environment.NewLine, row.Principal.Tools);
-            IsEditorOpen = true;
-        }
+        OnPropertyChanged(nameof(SelectedUserWarning));
+        OnPropertyChanged(nameof(HasSelectedUserWarning));
+        Grants = value is null ? string.Empty : string.Join(Environment.NewLine, value.Tools);
     }
-
-    partial void OnGeneratedKeyChanged(string value) => OnPropertyChanged(nameof(HasGeneratedKey));
 
     partial void OnExplainSummaryChanged(string value) => OnPropertyChanged(nameof(HasExplanation));
-
-    /// <summary>
-    /// Applied immediately rather than on a Save button, like the agent-management switches: the
-    /// proxy asks per request, so there is nothing to apply later and a checkbox that needed saving
-    /// would be a checkbox that lies between the click and the save.
-    /// </summary>
-    partial void OnKeysEnforcedChanged(bool value) => Run(() =>
-    {
-        if (_loading || _store.Snapshot.AllowUnauthenticated == !value)
-        {
-            return;
-        }
-
-        _store.SetAllowUnauthenticated(!value);
-        RefreshWarning();
-        StatusMessage = value
-            ? "Keys are now required. A caller with no key is refused."
-            : "Keys are no longer required. Every caller is served as the single user.";
-    });
-
-    partial void OnManageThroughProxyChanged(bool value) => Run(() =>
-    {
-        if (_loading || IsManageThroughProxyPinned || _settings.Current.PermissionsManagementEnabled == value)
-        {
-            return;
-        }
-
-        _settings.Current.PermissionsManagementEnabled = value;
-
-        // Fire and forget, as the agent-management switches do: the proxy reads the live setting on
-        // every request, so the switch is already in force and the write is only so it survives a
-        // restart.
-        _ = _settings.SaveAsync();
-        StatusMessage = value
-            ? "Callers granted the permissions tools can now read and edit this policy."
-            : "The permissions tools are switched off for every caller.";
-    });
-
-    [RelayCommand]
-    private void AddPrincipal()
-    {
-        SelectedPrincipal = null;
-        PrincipalName = string.Empty;
-        PrincipalEnabled = true;
-        PrincipalGrants = string.Empty;
-        IsEditorOpen = true;
-        OnPropertyChanged(nameof(EditorTitle));
-        OnPropertyChanged(nameof(SaveText));
-    }
 
     [RelayCommand]
     private void Save() => Run(() =>
     {
-        if (!IsEditorOpen)
+        if (SelectedUser is not { } row)
         {
             return;
         }
 
-        var grants = ParseGrants(PrincipalGrants);
-        if (SelectedPrincipal is { } row)
-        {
-            _store.SetGrants(row.Id, grants);
-            _store.SetEnabled(row.Id, PrincipalEnabled);
-            var name = PrincipalName.Trim();
-            Cancel();
-            Refresh();
-            StatusMessage = $"'{name}' updated. Changes apply to its next call, including one already connected.";
-        }
-        else
-        {
-            var name = PrincipalName.Trim();
-            var created = _store.CreatePrincipal(name, grants);
-            Cancel();
-            Refresh();
-            ShowKey(created.Key, name.Length > 0 ? name : created.Principal.Id);
-            StatusMessage = $"'{name}' added. Copy its key before dismissing it — it cannot be recovered.";
-        }
+        var grants = ParseGrants(Grants);
+        _permissions.SetGrants(row.Id, grants);
+        Reselect(row.Id);
+        StatusMessage = $"'{row.Name}' now holds {grants.Length} grant(s). Applies to its next call.";
     });
 
     [RelayCommand]
-    private void RotateKey() => Run(() =>
+    private void RevokeAll() => Run(() =>
     {
-        if (SelectedPrincipal is not { } row)
+        if (SelectedUser is not { } row)
         {
             return;
         }
 
-        var key = _store.RotateKey(row.Id);
-        Refresh();
-        ShowKey(key, row.Name);
-        StatusMessage = "Key rotated. The previous key stopped working the moment this one was issued.";
+        _permissions.SetGrants(row.Id, []);
+        Reselect(row.Id);
+        StatusMessage = $"'{row.Name}' may now use no tools.";
     });
-
-    [RelayCommand]
-    private void Remove() => Run(() =>
-    {
-        if (SelectedPrincipal is not { } row)
-        {
-            return;
-        }
-
-        _store.DeletePrincipal(row.Id);
-        Cancel();
-        DismissKey();
-        Refresh();
-        StatusMessage = $"'{row.Name}' removed and its key retired.";
-    });
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        IsEditorOpen = false;
-        SelectedPrincipal = null;
-        PrincipalName = string.Empty;
-        PrincipalEnabled = true;
-        PrincipalGrants = string.Empty;
-    }
-
-    [RelayCommand]
-    private void DismissKey()
-    {
-        GeneratedKey = string.Empty;
-        GeneratedKeyNotice = string.Empty;
-    }
 
     /// <summary>
-    /// Why the selected principal can or cannot use a named tool.
+    /// Why the selected user can or cannot use a named tool.
     ///
     /// <para>The page's reason for existing. Tool access is an AND over independent policies — this
-    /// principal's grants, whether agent management is on, whether a capability under it is on,
-    /// whether an environment variable is pinning any of them — so a tool can be withheld for several
-    /// reasons at once. A list of grants cannot show that, and neither can a single yes or no: an
-    /// operator who grants the tool and sees no change concludes the grant failed, when a switch was
+    /// user's grants, whether it is enabled, whether agent management is on, whether a capability under
+    /// it is on, whether an environment variable is pinning any of them — so a tool can be withheld for
+    /// several reasons at once. A list of grants cannot show that, and neither can a single yes or no:
+    /// an operator who grants the tool and sees no change concludes the grant failed, when a switch was
     /// also off all along. So every reason is listed, each with what to change.</para>
     /// </summary>
     [RelayCommand]
@@ -322,9 +176,9 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         Denials.Clear();
         OnPropertyChanged(nameof(HasDenials));
 
-        if (SelectedPrincipal is not { } row)
+        if (SelectedUser is not { } row)
         {
-            ExplainSummary = "Select a principal first.";
+            ExplainSummary = "Select a user first.";
             return;
         }
 
@@ -335,9 +189,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
             return;
         }
 
-        var tenant = new TenantContext(row.Id);
-        var serverKey = ServerKeyOf(tool);
-        foreach (var denial in _authorization.ExplainAll(tenant, serverKey, tool))
+        foreach (var denial in _authorization.ExplainAll(new TenantContext(row.Id), ServerKeyOf(tool), tool))
         {
             Denials.Add(new PermissionsDenialRow(denial));
         }
@@ -357,52 +209,32 @@ public sealed partial class PermissionsViewModel : ViewModelBase
     }
 
     /// <summary>One grant per line, trimmed, blanks dropped — a text box rather than a grid because a
-    /// grant is a short string and an operator pasting five of them should not have to click five
-    /// times.</summary>
+    /// grant is a short string and an operator pasting five of them should not click five times.</summary>
     private static string[] ParseGrants(string text) =>
     [
         .. text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
     ];
 
-    private void ShowKey(string key, string name)
+    /// <summary>Rebuilds the list and puts the selection back where it was, so saving a grant does not
+    /// close the editor the operator is still working in.</summary>
+    private void Reselect(string id)
     {
-        GeneratedKey = key;
-        GeneratedKeyNotice = $"New key for {name}. Copy it now; only its hash is stored, so it cannot be recovered.";
+        Refresh();
+        SelectedUser = Rows.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
     }
 
     private void Refresh()
     {
-        var snapshot = _store.Snapshot;
-        Principals.Clear();
-        foreach (var principal in snapshot.Principals)
+        Rows.Clear();
+        foreach (var user in _users.Snapshot.Users)
         {
-            Principals.Add(new PermissionsPrincipalRow(principal));
+            Rows.Add(new GrantRow(user, _permissions.GrantsFor(user.Id)));
         }
 
-        // Guarded rather than written through the backing fields: the handlers would otherwise persist
-        // what they have just read, and the generated properties are what the view binds to.
-        _loading = true;
-        try
-        {
-            KeysEnforced = !snapshot.AllowUnauthenticated;
-            ManageThroughProxy = _managementPolicy.ManagementEnabled;
-        }
-        finally
-        {
-            _loading = false;
-        }
-
-        OnPropertyChanged(nameof(HasPrincipals));
-        OnPropertyChanged(nameof(HasNoPrincipals));
+        OnPropertyChanged(nameof(HasRows));
+        OnPropertyChanged(nameof(HasNoRows));
         OnPropertyChanged(nameof(ConfigurationError));
         OnPropertyChanged(nameof(HasConfigurationError));
-        RefreshWarning();
-    }
-
-    private void RefreshWarning()
-    {
-        OnPropertyChanged(nameof(Warning));
-        OnPropertyChanged(nameof(HasWarning));
     }
 
     private void Run(Action action)
@@ -413,7 +245,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = ex is ArgumentException or InvalidOperationException or PermissionsNotFoundException
+            StatusMessage = ex is ArgumentException or InvalidOperationException
                 ? ex.Message
                 : "The change could not be saved. Check the settings folder's permissions and available disk space.";
         }

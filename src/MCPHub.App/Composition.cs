@@ -11,6 +11,7 @@ using MCPHub.Core.Backup;
 using MCPHub.Core.Management;
 using MCPHub.Core.Models;
 using MCPHub.Core.Permissions;
+using MCPHub.Core.Users;
 using MCPHub.Core.Process;
 using MCPHub.Core.Recipes;
 using MCPHub.Core.Routing;
@@ -86,16 +87,23 @@ public static class Composition
         services.AddSingleton<IAgentManagementPolicy>(sp => sp.GetRequiredService<AgentManagementPolicy>());
 
         // Who may use which tools, and the tools for managing that. The hub is authoritative: a caller
-        // presents a key, is resolved to one principal, and sees only what that principal is granted.
+        // presents a key, is resolved to one user, and sees only what that user is granted.
         // Off in effect until keys are enforced (AllowUnauthenticated false), which is what keeps the
         // single-user desktop behaving exactly as it always has.
+        // Identity, shared by every surface: one user, one key, usable on the proxy and on the Router.
+        services.AddSingleton<UserStore>();
+        services.AddSingleton<IUserDirectory>(sp => sp.GetRequiredService<UserStore>());
+        services.AddSingleton<IWritableUsers>(sp => sp.GetRequiredService<UserStore>());
+
+        // What each user may use. Grants only — the directory above says who they are.
         services.AddSingleton<PermissionsStore>();
         services.AddSingleton<IPermissionsConfigurationSource>(sp => sp.GetRequiredService<PermissionsStore>());
         services.AddSingleton<IWritablePermissions>(sp => sp.GetRequiredService<PermissionsStore>());
         services.AddSingleton<PermissionsToolAuthorization>();
-        // Its own switch, off by default: these tools govern every other tool, so without it the widest
-        // grant would silently amount to administrator.
-        services.AddSingleton<PermissionsManagementPolicy>();
+
+        // One switch for both administration surfaces, off by default: they govern every other tool, so
+        // without it the widest grant would silently amount to administrator.
+        services.AddSingleton<AdministrationPolicy>();
 
         // MCP proxy / aggregator
         services.AddSingleton<IUpstreamRegistry, UpstreamRegistry>();
@@ -108,10 +116,15 @@ public static class Composition
         services.AddSingleton(sp => new CompositeToolAuthorization(
             sp.GetRequiredService<RecipeAccessPolicy>(),
             sp.GetRequiredService<AgentManagementPolicy>(),
-            sp.GetRequiredService<PermissionsManagementPolicy>(),
+            sp.GetRequiredService<AdministrationPolicy>(),
             sp.GetRequiredService<PermissionsToolAuthorization>()));
         services.AddSingleton<IToolAuthorization>(sp => sp.GetRequiredService<CompositeToolAuthorization>());
+        services.AddSingleton<ILocalToolProvider>(sp => new UserToolProvider(
+            sp.GetRequiredService<IUserDirectory>(),
+            sp.GetRequiredService<IWritablePermissions>(),
+            sp.GetRequiredService<ILogger<UserToolProvider>>()));
         services.AddSingleton<ILocalToolProvider>(sp => new PermissionsToolProvider(
+            sp.GetRequiredService<IUserDirectory>(),
             sp.GetRequiredService<IPermissionsConfigurationSource>(),
             sp.GetRequiredService<CompositeToolAuthorization>(),
             sp.GetRequiredService<ILogger<PermissionsToolProvider>>()));
@@ -126,6 +139,7 @@ public static class Composition
         services.AddSingleton(sp =>
         {
             var permissions = sp.GetRequiredService<IPermissionsConfigurationSource>();
+            var users = sp.GetRequiredService<IUserDirectory>();
             return new ProxyHost(
                 sp.GetRequiredService<ProxyHandlers>(),
                 sp.GetRequiredService<ILoggerFactory>(),
@@ -139,7 +153,7 @@ public static class Composition
                     // caller may present NO key is asked per request, so turning enforcement on and off
                     // takes effect live too.
                     TenantAuthenticator = new DelegatingTenantAuthenticator(key =>
-                        permissions.Resolve(key) is { } principal ? new TenantContext(principal.Id) : null),
+                        users.Resolve(key) is { } user ? new TenantContext(user.Id) : null),
                     AllowAnonymous = () => permissions.Snapshot.AllowUnauthenticated,
                 });
         });
@@ -193,6 +207,7 @@ public static class Composition
         services.AddSingleton<RouterViewModel>();
         services.AddSingleton<DiagnosticsViewModel>();
         services.AddSingleton<RecipesViewModel>();
+        services.AddSingleton<UsersViewModel>();
         services.AddSingleton<PermissionsViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<UpdatesViewModel>();

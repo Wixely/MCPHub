@@ -6,7 +6,7 @@ namespace MCPHub.Proxy;
 /// <para><b>Operator-facing, never caller-facing.</b> The proxy's whole authorization stance is that
 /// an ungranted tool is <em>absent</em> rather than refused, so a tenant cannot discover what it may
 /// not use. Handing a denial reason back to the denied caller would undo that. These are produced for
-/// whoever administers the hub, through the management surface, about a principal that is not the
+/// whoever administers the hub, through the management surface, about a user that is not the
 /// caller asking.</para>
 ///
 /// <para>The reason this type exists is that <see cref="CompositeToolAuthorization"/> is an AND over

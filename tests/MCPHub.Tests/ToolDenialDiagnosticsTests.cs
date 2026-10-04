@@ -1,5 +1,6 @@
 using MCPHub.Core.Management;
 using MCPHub.Core.Permissions;
+using MCPHub.Core.Users;
 using MCPHub.Core.Settings;
 using MCPHub.Proxy;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,20 +26,36 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private static PermissionsPrincipal Principal(string id, params string[] tools) => new()
-    {
-        Id = id,
-        Name = id,
-        KeyHash = PermissionsConfigurationRules.HashKey($"key-for-{id}-0123456789abcdef"),
-        Tools = tools,
-    };
+    private static PermissionsGrant Grant(string userId, params string[] tools) =>
+        new() { UserId = userId, Tools = tools };
 
-    private static PermissionsToolAuthorization Permissions(params PermissionsPrincipal[] principals) =>
-        new(new StaticPermissionsSource(new PermissionsConfiguration
-        {
-            AllowUnauthenticated = false,
-            Principals = principals,
-        }));
+    /// <summary>
+    /// Permissions over a directory holding exactly the granted users. Identity and grants are two
+    /// documents now, so a test that wants a denial about grants has to say who exists as well.
+    /// </summary>
+    private static PermissionsToolAuthorization Permissions(params PermissionsGrant[] grants) =>
+        Permissions(enabled: true, grants);
+
+    private static PermissionsToolAuthorization Permissions(bool enabled, params PermissionsGrant[] grants) =>
+        new(
+            new StaticUserDirectory(new HubUsersConfiguration
+            {
+                Users =
+                [
+                    .. grants.Select(g => new HubUser
+                    {
+                        Id = g.UserId,
+                        Name = g.UserId,
+                        Enabled = enabled,
+                        KeyHash = UserKeys.Hash($"key-for-{g.UserId}"),
+                    }),
+                ],
+            }),
+            new StaticPermissionsSource(new PermissionsConfiguration
+            {
+                AllowUnauthenticated = false,
+                Grants = grants,
+            }));
 
     /// <summary>
     /// A policy whose switches come only from the environment. Settings are left at their defaults —
@@ -57,7 +74,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     [Fact]
     public void An_allowed_tool_explains_nothing()
     {
-        var permissions = Permissions(Principal("banter", "*"));
+        var permissions = Permissions(Grant("banter", "*"));
 
         Assert.Null(permissions.Explain(new TenantContext("banter"), "kodi", "kodi__play_pause"));
     }
@@ -65,7 +82,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     [Fact]
     public void Every_denial_this_policy_reports_comes_with_a_reason()
     {
-        var permissions = Permissions(Principal("banter", "kodi__*"));
+        var permissions = Permissions(Grant("banter", "kodi__*"));
         var tenant = new TenantContext("banter");
 
         Assert.False(permissions.IsToolVisible(tenant, "redis", "redis__get"));
@@ -77,7 +94,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     [Fact]
     public void A_missing_grant_says_so_and_offers_the_grant_to_add()
     {
-        var denial = Permissions(Principal("banter", "kodi__*"))
+        var denial = Permissions(Grant("banter", "kodi__*"))
             .Explain(new TenantContext("banter"), "redis", "redis__get")!;
 
         Assert.Equal(PermissionsToolAuthorization.NoGrantCode, denial.Code);
@@ -86,21 +103,21 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     }
 
     [Fact]
-    public void A_disabled_principal_is_distinguished_from_a_missing_grant()
+    public void A_suspended_user_is_distinguished_from_a_missing_grant()
     {
-        var denial = Permissions(Principal("banter", "*") with { Enabled = false })
+        var denial = Permissions(enabled: false, Grant("banter", "*"))
             .Explain(new TenantContext("banter"), "kodi", "kodi__play_pause")!;
 
-        Assert.Equal(PermissionsToolAuthorization.PrincipalDisabledCode, denial.Code);
+        Assert.Equal(PermissionsToolAuthorization.UserDisabledCode, denial.Code);
     }
 
     [Fact]
-    public void A_principal_deleted_mid_session_is_distinguished_from_one_never_authenticated()
+    public void A_user_deleted_mid_session_is_distinguished_from_one_never_authenticated()
     {
-        var permissions = Permissions(Principal("banter", "*"));
+        var permissions = Permissions(Grant("banter", "*"));
 
         Assert.Equal(
-            PermissionsToolAuthorization.UnknownPrincipalCode,
+            PermissionsToolAuthorization.UnknownUserCode,
             permissions.Explain(new TenantContext("deleted"), "kodi", "kodi__x")!.Code);
         Assert.Equal(
             PermissionsToolAuthorization.UnauthenticatedCode,
@@ -182,7 +199,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     public void Both_causes_are_reported_when_both_are_wrong()
     {
         var composite = new CompositeToolAuthorization(
-            Permissions(Principal("banter", "kodi__*")),
+            Permissions(Grant("banter", "kodi__*")),
             Management((AgentManagementPolicy.EnabledVariable, "false")));
 
         var denials = composite.ExplainAll(new TenantContext("banter"), "mcphub", Install);
@@ -199,7 +216,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     [Fact]
     public void Fixing_one_cause_leaves_exactly_the_other()
     {
-        var granted = Principal("banter", "*");
+        var granted = Grant("banter", "*");
 
         var afterGrant = new CompositeToolAuthorization(
             Permissions(granted),
@@ -223,7 +240,7 @@ public sealed class ToolDenialDiagnosticsTests : IDisposable
     public void An_available_tool_has_no_denials_at_all()
     {
         var composite = new CompositeToolAuthorization(
-            Permissions(Principal("banter", "kodi__*")),
+            Permissions(Grant("banter", "kodi__*")),
             Management((AgentManagementPolicy.EnabledVariable, "true")));
 
         Assert.Empty(composite.ExplainAll(new TenantContext("banter"), "kodi", "kodi__play_pause"));

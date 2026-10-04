@@ -6,8 +6,10 @@ using TempDir = MCPHub.Tests.RecipeStoreTests.TempDir;
 namespace MCPHub.Tests;
 
 /// <summary>
-/// Editing the permissions document: issuing keys, changing grants, and the two failure modes that
-/// matter — a key nobody can recover, and a corrupt file that cannot widen access.
+/// The desktop's grant document: what persists, and what happens when it cannot be read.
+///
+/// <para>Grants only. Keys, names and suspension are <see cref="UserDirectoryTests"/>'s, and a test
+/// here needing a key would mean the split had failed.</para>
 /// </summary>
 public sealed class PermissionsStoreTests : IDisposable
 {
@@ -19,193 +21,177 @@ public sealed class PermissionsStoreTests : IDisposable
 
     private string FilePath => Path.Combine(_dir.Path, "permissions.json");
 
-    // ---- issuing keys --------------------------------------------------------------------------
+    // ---- grants --------------------------------------------------------------------------------
 
     [Fact]
-    public void A_new_principal_can_use_the_key_it_was_handed()
+    public void A_user_with_no_entry_is_granted_nothing()
     {
         var store = Store();
 
-        var (principal, key) = store.CreatePrincipal("Banter", ["*"]);
-
-        Assert.Equal(principal.Id, store.Resolve(key)!.Id);
-        Assert.Equal("Banter", store.Resolve(key)!.Name);
+        Assert.Null(store.GrantsFor("alice"));
+        Assert.Empty(store.Snapshot.Grants);
     }
-
-    /// <summary>
-    /// The key exists once. Only its hash is stored, so a lost key is rotated rather than looked up —
-    /// and nothing in the file can be turned back into it.
-    /// </summary>
-    [Fact]
-    public void The_key_is_never_written_down()
-    {
-        var store = Store();
-        var (_, key) = store.CreatePrincipal("Banter", ["*"]);
-
-        Assert.DoesNotContain(key, File.ReadAllText(FilePath), StringComparison.Ordinal);
-        Assert.Contains(PermissionsConfigurationRules.HashKey(key), File.ReadAllText(FilePath), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Rotating_a_key_issues_a_new_one_and_retires_the_old()
-    {
-        var store = Store();
-        var (principal, first) = store.CreatePrincipal("Banter", ["*"]);
-
-        var second = store.RotateKey(principal.Id);
-
-        Assert.NotEqual(first, second);
-        Assert.Null(store.Resolve(first));
-        Assert.Equal(principal.Id, store.Resolve(second)!.Id);
-    }
-
-    [Fact]
-    public void Two_principals_never_share_a_key()
-    {
-        var store = Store();
-
-        var (_, first) = store.CreatePrincipal("one", []);
-        var (_, second) = store.CreatePrincipal("two", []);
-
-        Assert.NotEqual(first, second);
-        Assert.NotEqual(store.Resolve(first)!.Id, store.Resolve(second)!.Id);
-    }
-
-    // ---- changing policy -----------------------------------------------------------------------
 
     [Fact]
     public void Grants_can_be_replaced_and_take_effect_at_once()
     {
         var store = Store();
-        var (principal, key) = store.CreatePrincipal("Banter", ["kodi__*"]);
+        store.SetGrants("alice", ["kodi__*"]);
+        Assert.Equal(["kodi__*"], store.GrantsFor("alice")!.Tools);
 
-        store.SetGrants(principal.Id, ["redis__get", "mcphub__*"]);
+        store.SetGrants("alice", ["redis__get", "redis__set"]);
 
-        Assert.Equal(["redis__get", "mcphub__*"], store.Resolve(key)!.Tools);
-    }
-
-    [Fact]
-    public void Disabling_a_principal_stops_its_key_without_losing_its_grants()
-    {
-        var store = Store();
-        var (principal, key) = store.CreatePrincipal("Banter", ["kodi__*"]);
-
-        store.SetEnabled(principal.Id, false);
-        Assert.Null(store.Resolve(key));
-
-        store.SetEnabled(principal.Id, true);
-        Assert.Equal(["kodi__*"], store.Resolve(key)!.Tools);
-    }
-
-    [Fact]
-    public void Deleting_a_principal_retires_its_key()
-    {
-        var store = Store();
-        var (principal, key) = store.CreatePrincipal("Banter", ["*"]);
-
-        store.DeletePrincipal(principal.Id);
-
-        Assert.Null(store.Resolve(key));
-        Assert.Empty(store.Snapshot.Principals);
+        Assert.Equal(["redis__get", "redis__set"], store.GrantsFor("alice")!.Tools);
+        Assert.Single(store.Snapshot.Grants);
     }
 
     /// <summary>
-    /// A management call that reports success having changed nothing is the hardest kind of bug to
-    /// see, so an unknown id is refused by name instead.
+    /// Granting nothing is a state, not a deletion: the user keeps its entry, so an operator can see
+    /// it was considered and left with nothing rather than never configured.
     /// </summary>
     [Fact]
-    public void Editing_a_principal_that_is_not_there_is_refused_by_name()
+    public void Granting_an_empty_list_leaves_the_user_holding_nothing()
     {
         var store = Store();
+        store.SetGrants("alice", ["*"]);
 
-        Assert.Equal("ghost", Assert.Throws<PermissionsNotFoundException>(() => store.SetEnabled("ghost", false)).Id);
-        Assert.Throws<PermissionsNotFoundException>(() => store.SetGrants("ghost", []));
-        Assert.Throws<PermissionsNotFoundException>(() => store.RotateKey("ghost"));
-        Assert.Throws<PermissionsNotFoundException>(() => store.DeletePrincipal("ghost"));
+        store.SetGrants("alice", []);
+
+        Assert.Empty(store.GrantsFor("alice")!.Tools);
+        Assert.False(PermissionsConfigurationRules.Covers(store.GrantsFor("alice")!, "kodi", "kodi__x"));
     }
 
     [Fact]
-    public void A_rejected_change_leaves_the_stored_policy_alone()
+    public void Forgetting_a_user_drops_its_grants_and_leaves_the_others()
     {
         var store = Store();
-        var (principal, key) = store.CreatePrincipal("Banter", ["kodi__*"]);
+        store.SetGrants("alice", ["kodi__*"]);
+        store.SetGrants("bob", ["redis__*"]);
 
-        Assert.Throws<ArgumentException>(() => store.SetGrants(principal.Id, ["two words"]));
+        store.ForgetUser("alice");
 
-        Assert.Equal(["kodi__*"], store.Resolve(key)!.Tools);
-        Assert.Equal(["kodi__*"], Store().Resolve(key)!.Tools);
+        Assert.Null(store.GrantsFor("alice"));
+        Assert.Equal(["redis__*"], store.GrantsFor("bob")!.Tools);
+    }
+
+    /// <summary>Deleting a user calls this for one that may never have had grants, so it has to be
+    /// harmless rather than an error.</summary>
+    [Fact]
+    public void Forgetting_a_user_that_held_nothing_is_not_an_error()
+    {
+        var store = Store();
+        store.SetGrants("bob", ["redis__*"]);
+
+        store.ForgetUser("never-existed");
+
+        Assert.Single(store.Snapshot.Grants);
+    }
+
+    [Fact]
+    public void Replacing_every_grant_at_once_is_how_a_migration_arrives()
+    {
+        var store = Store();
+        store.SetGrants("alice", ["kodi__*"]);
+
+        store.Replace([new PermissionsGrant { UserId = "imported", Tools = ["*"] }]);
+
+        Assert.Null(store.GrantsFor("alice"));
+        Assert.Equal(["*"], store.GrantsFor("imported")!.Tools);
     }
 
     // ---- persistence ---------------------------------------------------------------------------
 
     [Fact]
-    public void Policy_survives_a_restart()
+    public void Grants_survive_a_restart()
     {
-        var (principal, key) = Store().CreatePrincipal("Banter", ["kodi__*", "mcphub__list_services"]);
+        Store().SetGrants("alice", ["kodi__*"]);
 
-        var reopened = Store();
-
-        Assert.Equal(principal.Id, reopened.Resolve(key)!.Id);
-        Assert.Equal(["kodi__*", "mcphub__list_services"], reopened.Resolve(key)!.Tools);
+        Assert.Equal(["kodi__*"], Store().GrantsFor("alice")!.Tools);
     }
 
     [Fact]
     public void The_unauthenticated_switch_persists_too()
     {
-        var store = Store();
-        Assert.True(store.Snapshot.AllowUnauthenticated);
+        Assert.True(Store().Snapshot.AllowUnauthenticated);
 
-        store.SetAllowUnauthenticated(false);
+        Store().SetAllowUnauthenticated(false);
 
         Assert.False(Store().Snapshot.AllowUnauthenticated);
     }
 
     /// <summary>
-    /// A corrupt file must not stop the hub launching, and must not be quietly overwritten either —
-    /// somebody may still want to repair it. Failing to an empty document grants nothing, which is
-    /// the only direction this is allowed to fail in.
+    /// A hub nobody has configured should leave no trace in the settings directory — the file appearing
+    /// is what tells an operator somebody set a policy.
     /// </summary>
     [Fact]
-    public void A_corrupt_document_recognises_nobody_and_refuses_to_be_edited()
+    public void Nothing_is_written_until_the_first_change()
     {
-        var (_, key) = Store().CreatePrincipal("Banter", ["*"]);
-        var before = File.ReadAllText(FilePath);
+        var store = Store();
+        Assert.False(File.Exists(FilePath));
+
+        store.SetAllowUnauthenticated(false);
+
+        Assert.True(File.Exists(FilePath));
+    }
+
+    // ---- a document that cannot be read --------------------------------------------------------
+
+    /// <summary>
+    /// Corrupt means "grants nothing", not "will not start": the desktop has to come up to be
+    /// repaired. An empty document grants nothing, so failing this way cannot widen access.
+    /// </summary>
+    [Fact]
+    public void A_corrupt_document_grants_nothing_and_refuses_to_be_edited()
+    {
+        Directory.CreateDirectory(_dir.Path);
         File.WriteAllText(FilePath, "{ not json");
 
         var store = Store();
 
         Assert.NotNull(store.LoadError);
-        Assert.Null(store.Resolve(key));
-        Assert.Empty(store.Snapshot.Principals);
-        Assert.Throws<InvalidOperationException>(() => store.CreatePrincipal("another", ["*"]));
+        Assert.Empty(store.Snapshot.Grants);
+        Assert.Throws<InvalidOperationException>(() => store.SetGrants("alice", ["*"]));
+        Assert.Throws<InvalidOperationException>(() => store.SetAllowUnauthenticated(false));
+        // Still there to be repaired, rather than replaced by an empty one on the way past.
         Assert.Equal("{ not json", File.ReadAllText(FilePath));
-        Assert.NotEqual(before, File.ReadAllText(FilePath));
     }
 
-    /// <summary>
-    /// A document that parses but could never be enforced is treated the same way — a hash that
-    /// cannot match is a principal that is quietly dead, and starting up pretending otherwise would
-    /// hide it.
-    /// </summary>
     [Fact]
     public void A_document_that_parses_but_cannot_be_enforced_is_also_refused()
     {
-        Store().CreatePrincipal("Banter", ["*"]);
+        Directory.CreateDirectory(_dir.Path);
         File.WriteAllText(
             FilePath,
-            """{ "SchemaVersion": 1, "AllowUnauthenticated": false, "Principals": [ { "Id": "x", "Name": "x", "Enabled": true, "KeyHash": "nope", "Tools": [] } ] }""");
+            """{"SchemaVersion":1,"Grants":[{"UserId":"alice","Tools":["*"]},{"UserId":"alice","Tools":["kodi__*"]}]}""");
 
         var store = Store();
 
         Assert.NotNull(store.LoadError);
-        Assert.Empty(store.Snapshot.Principals);
+        Assert.Empty(store.Snapshot.Grants);
+    }
+
+    /// <summary>
+    /// Validation happens before the disk is touched, so a change the rules refuse leaves both the
+    /// store and the file exactly as they were.
+    /// </summary>
+    [Fact]
+    public void A_rejected_change_leaves_the_stored_policy_alone()
+    {
+        var store = Store();
+        store.SetGrants("alice", ["kodi__*"]);
+        var before = File.ReadAllText(FilePath);
+
+        Assert.Throws<ArgumentException>(() => store.SetGrants("alice", ["two words"]));
+
+        Assert.Equal(["kodi__*"], store.GrantsFor("alice")!.Tools);
+        Assert.Equal(before, File.ReadAllText(FilePath));
     }
 
     [Fact]
-    public void Nothing_is_written_until_the_first_change()
+    public void A_grant_cannot_be_set_for_nobody()
     {
-        _ = Store();
+        var store = Store();
 
-        Assert.False(File.Exists(FilePath), "an untouched hub should not create a permissions file");
+        Assert.Throws<ArgumentException>(() => store.SetGrants("  ", ["*"]));
     }
 }

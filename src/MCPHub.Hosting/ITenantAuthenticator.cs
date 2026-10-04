@@ -41,7 +41,7 @@ public sealed class StaticTenantAuthenticator : ITenantAuthenticator
 
 /// <summary>
 /// Resolves a token through a delegate — the bridge between the hosted endpoint and whatever holds the
-/// hub's principals.
+/// hub's user directory.
 ///
 /// <para>A delegate rather than an interface so that this assembly needs no reference to the one that
 /// owns the policy: the permissions document lives in MCPHub.Core, which already depends on the proxy,

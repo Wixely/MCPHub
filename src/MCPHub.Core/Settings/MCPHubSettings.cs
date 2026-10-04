@@ -228,11 +228,12 @@ public sealed class MCPHubSettings
     public bool AgentManagementUpdateChecksEnabled { get; set; } = true;
 
     /// <summary>
-    /// Whether a caller gets the <c>permissions__*</c> tools: reading and editing who may use which tools.
-    /// Off by default, and for a stronger reason than agent management is — these tools govern all the
-    /// others, so a caller holding them can grant itself anything. Keeping it a separate switch means the
-    /// widest tool grant (<c>*</c>) does not quietly amount to administrator. A management UI's deployment
-    /// turns it on deliberately. Overridable with <c>MCPHUB_PERMISSIONS_MANAGEMENT_ENABLED</c>.
+    /// Whether a caller gets the hub's administration tools — <c>users__*</c> and <c>permissions__*</c>:
+    /// who may reach this hub, and what each may use. Off by default, and for a stronger reason than
+    /// agent management is — these tools govern all the others, so a caller holding them can grant itself
+    /// anything. Keeping it a separate switch means the widest tool grant (<c>*</c>) does not quietly
+    /// amount to administrator. A management UI's deployment turns it on deliberately. Overridable with
+    /// <c>MCPHUB_ADMINISTRATION_ENABLED</c>.
     /// </summary>
-    public bool PermissionsManagementEnabled { get; set; }
+    public bool AdministrationEnabled { get; set; }
 }
