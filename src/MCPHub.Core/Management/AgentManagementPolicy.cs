@@ -59,7 +59,7 @@ public interface IAgentManagementPolicy
 /// use are filtered out of <c>tools/list</c> and refused on call. Every other server's tools are allowed —
 /// stack this with other feature policies through <see cref="CompositeToolAuthorization"/>.
 /// </summary>
-public sealed class AgentManagementPolicy : IAgentManagementPolicy, IToolAuthorization
+public sealed class AgentManagementPolicy : IAgentManagementPolicy, IToolAuthorization, IToolAuthorizationDiagnostics
 {
     /// <summary>Environment variable that forces the whole feature on/off.</summary>
     public const string EnabledVariable = "MCPHUB_AGENT_MANAGEMENT_ENABLED";
@@ -160,6 +160,64 @@ public sealed class AgentManagementPolicy : IAgentManagementPolicy, IToolAuthori
         var prefix = AgentManagementToolProvider.ProviderKey + ProxyConstants.NamespaceSeparator;
         var original = exposedToolName.StartsWith(prefix, StringComparison.Ordinal) ? exposedToolName[prefix.Length..] : exposedToolName;
         return IsToolEnabled(original);
+    }
+
+    /// <summary>Agent management is off altogether, so no <c>mcphub__*</c> tool is available.</summary>
+    public const string ManagementOffCode = "agent_management.off";
+
+    /// <summary>Management is on, but the capability this tool belongs to is off.</summary>
+    public const string CapabilityOffCode = "agent_management.capability_off";
+
+    /// <summary>The tool is not one this policy knows, so it cannot be enabled.</summary>
+    public const string UnknownToolCode = "agent_management.unknown_tool";
+
+    /// <inheritdoc />
+    public ToolDenial? Explain(TenantContext tenant, string serverKey, string exposedToolName)
+    {
+        // Same predicate the policy enforces with: an explanation that disagreed with enforcement
+        // would send an operator after the wrong switch.
+        if (IsAllowed(serverKey, exposedToolName))
+            return null;
+
+        var prefix = AgentManagementToolProvider.ProviderKey + ProxyConstants.NamespaceSeparator;
+        var tool = exposedToolName.StartsWith(prefix, StringComparison.Ordinal) ? exposedToolName[prefix.Length..] : exposedToolName;
+
+        if (!ManagementEnabled)
+            return new ToolDenial
+            {
+                Code = ManagementOffCode,
+                Reason = "Letting agents manage servers is off, so no mcphub__ tool is available.",
+                Remedy = $"Turn on Settings → Agent management, or set {EnabledVariable}=true.",
+                PinnedBy = ManagementEnabledOverrideSource,
+            };
+
+        // Management is on and this specific capability is not. Naming the capability AND the variable
+        // pinning it is the whole point: without both, an operator toggles a checkbox that an
+        // environment variable immediately overrides, and nothing says so.
+        var (capability, variable, pinnedBy) =
+            AgentManagementToolProvider.ControlTools.Contains(tool)
+                ? ("Start, stop and restart servers", ControlVariable, ControlOverrideSource)
+                : AgentManagementToolProvider.InstallTools.Contains(tool)
+                    ? ("Install and update servers", InstallVariable, InstallOverrideSource)
+                    : AgentManagementToolProvider.UpdateCheckTools.Contains(tool)
+                        ? ("Check GitHub for updates", UpdateChecksVariable, UpdateChecksOverrideSource)
+                        : (null, null, null);
+
+        if (capability is null)
+            return new ToolDenial
+            {
+                Code = UnknownToolCode,
+                Reason = $"'{tool}' is not an agent-management tool this version knows.",
+                Remedy = "Check the tool name against the hub's version.",
+            };
+
+        return new ToolDenial
+        {
+            Code = CapabilityOffCode,
+            Reason = $"Agent management is on, but '{capability}' is off — which is what '{tool}' needs.",
+            Remedy = $"Turn on that switch, or set {variable}=true.",
+            PinnedBy = pinnedBy,
+        };
     }
 
     private bool? Override(string variable) => EnvironmentFlag.Parse(_environment(variable));

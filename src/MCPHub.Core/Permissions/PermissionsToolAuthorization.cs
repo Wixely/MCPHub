@@ -18,7 +18,7 @@ namespace MCPHub.Core.Permissions;
 /// its default of <see langword="true"/> is what keeps the single-user desktop hub working exactly
 /// as it did: no keys issued, no tenants, everything visible.</para>
 /// </summary>
-public sealed class PermissionsToolAuthorization : IToolAuthorization
+public sealed class PermissionsToolAuthorization : IToolAuthorization, IToolAuthorizationDiagnostics
 {
     private readonly IPermissionsConfigurationSource _source;
 
@@ -35,6 +35,72 @@ public sealed class PermissionsToolAuthorization : IToolAuthorization
     /// <inheritdoc />
     public bool IsCallAllowed(TenantContext tenant, string serverKey, string exposedToolName) =>
         Allowed(tenant, serverKey, exposedToolName);
+
+    /// <summary>No principal for the tenant and unauthenticated callers are refused.</summary>
+    public const string UnauthenticatedCode = "permissions.unauthenticated";
+
+    /// <summary>The tenant does not match any principal — typically one deleted mid-session.</summary>
+    public const string UnknownPrincipalCode = "permissions.unknown_principal";
+
+    /// <summary>The principal exists but is switched off.</summary>
+    public const string PrincipalDisabledCode = "permissions.principal_disabled";
+
+    /// <summary>The principal is live, but nothing in its grants covers this tool.</summary>
+    public const string NoGrantCode = "permissions.no_grant";
+
+    /// <inheritdoc />
+    public ToolDenial? Explain(TenantContext tenant, string serverKey, string exposedToolName)
+    {
+        ArgumentNullException.ThrowIfNull(tenant);
+
+        // Derived from the same predicate that enforces, so an explanation can never claim a tool is
+        // denied that this policy would allow, or the reverse.
+        if (Allowed(tenant, serverKey, exposedToolName))
+        {
+            return null;
+        }
+
+        var configuration = _source.Snapshot;
+        var principal = configuration.Principals.FirstOrDefault(
+            p => string.Equals(p.Id, tenant.TenantId, StringComparison.Ordinal));
+
+        if (principal is null)
+        {
+            return tenant.IsDefault
+                ? new ToolDenial
+                {
+                    Code = UnauthenticatedCode,
+                    Reason = "The caller presented no key that resolves to a principal, and this hub "
+                             + "refuses unauthenticated callers.",
+                    Remedy = "Issue the caller a key, or set AllowUnauthenticated to allow anonymous use.",
+                }
+                : new ToolDenial
+                {
+                    Code = UnknownPrincipalCode,
+                    Reason = $"No principal has the id '{tenant.TenantId}'.",
+                    Remedy = "The principal was probably deleted while the caller was connected. "
+                             + "Re-create it, or have the caller reconnect with a current key.",
+                };
+        }
+
+        if (!principal.Enabled)
+        {
+            return new ToolDenial
+            {
+                Code = PrincipalDisabledCode,
+                Reason = $"Principal '{principal.Name}' is disabled, so none of its grants apply.",
+                Remedy = "Enable the principal.",
+            };
+        }
+
+        return new ToolDenial
+        {
+            Code = NoGrantCode,
+            Reason = $"Principal '{principal.Name}' holds no grant covering '{exposedToolName}'.",
+            Remedy = $"Grant '{exposedToolName}', or '{serverKey}"
+                     + $"{PermissionsConfigurationRules.ServerWildcardSuffix}' for the whole server.",
+        };
+    }
 
     /// <summary>
     /// One decision for both questions, deliberately. The proxy filters <c>tools/list</c> with
