@@ -20,7 +20,7 @@
   <DockPanel Margin="24">
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
       <TextBlock Text="Users" FontSize="20" FontWeight="SemiBold"/>
-      <TextBlock Text="Who may reach this hub. A user is created once here and holds one key, working on the proxy and the Model Router alike; what it may do is set on the Permissions and Router pages."
+      <TextBlock Text="Who may use this hub. Each user holds one key. Give it models on Router and tools on Permissions."
                  Opacity="0.65" TextWrapping="Wrap"/>
       <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontWeight="SemiBold"/>
     </StackPanel>
@@ -32,7 +32,7 @@
           <StackPanel Spacing="4">
             <TextBlock Text="Users are not loaded" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding ConfigurationError}" TextWrapping="Wrap"/>
-            <TextBlock Text="No key is recognised while this stands, and changes here will not save — the existing file is left untouched rather than overwritten."
+            <TextBlock Text="No key works, and nothing here will save. The file is left as it is."
                        FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
@@ -40,7 +40,7 @@
         <Border IsVisible="{Binding HasWarning}" Background="#33D29922" BorderBrush="#66D29922"
                 BorderThickness="1" CornerRadius="8" Padding="16">
           <StackPanel Spacing="4">
-            <TextBlock Text="These users are not being applied" FontWeight="SemiBold"/>
+            <TextBlock Text="These users do nothing yet" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding Warning}" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
@@ -48,14 +48,14 @@
         <Border Background="{DynamicResource UsersCardBackground}" CornerRadius="8" Padding="16">
           <StackPanel Spacing="10">
             <CheckBox IsChecked="{Binding KeysEnforced}" Content="Require a key"/>
-            <TextBlock Text="On, a caller with no key is refused and each key sees only what its user is allowed. Off — the default — every caller is served as the single user and gets every tool, which is how MCPHub has always behaved on its own machine."
+            <TextBlock Text="Off, anyone reaching this hub gets every tool. On, only these users do."
                        FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
             <CheckBox IsChecked="{Binding AdministerThroughProxy}" IsEnabled="{Binding CanEditAdministration}"
-                      Content="Let callers administer this hub through the proxy"/>
-            <TextBlock Text="Exposes the users__ and permissions__ tools, so another application can manage this for you. Off by default: they govern every other tool, so a caller holding them can grant itself anything."
+                      Content="Let users manage this hub"/>
+            <TextBlock Text="Exposes the users__ and permissions__ tools, so another application can add users and grant tools. Off by default — a user with them can grant itself anything."
                        FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
             <TextBlock IsVisible="{Binding IsAdministrationPinned}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
-                       Text="{Binding AdministrationPinnedBy, StringFormat='Pinned by the environment: {0}. The checkbox cannot be changed while that is set.'}"/>
+                       Text="{Binding AdministrationPinnedBy, StringFormat='Set by the environment: {0}. Locked here.'}"/>
           </StackPanel>
         </Border>
 
@@ -64,7 +64,7 @@
           <Button Grid.Column="1" Content="Add user" Command="{Binding AddUserCommand}"/>
         </Grid>
         <TextBlock IsVisible="{Binding HasNoUsers}" Opacity="0.7" TextWrapping="Wrap"
-                   Text="No users yet. Add one to issue a key — until then, and while a key is not required, every caller gets every tool."/>
+                   Text="No users yet. Add one to get a key."/>
         <ListBox IsVisible="{Binding HasUsers}" ItemsSource="{Binding Users}"
                  SelectedItem="{Binding SelectedUser}" MaxHeight="260">
           <ListBox.ItemTemplate>
@@ -83,10 +83,10 @@
                 BorderBrush="{DynamicResource UsersCardBorder}" BorderThickness="1" CornerRadius="8" Padding="16">
           <StackPanel Spacing="10">
             <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold"/>
-            <TextBox Watermark="Name — an agent's nickname, or the application holding the key"
+            <TextBox Watermark="Name — whatever holds the key, e.g. Banter or Claude Code"
                      Text="{Binding UserName}"/>
             <CheckBox IsChecked="{Binding UserEnabled}" Content="Enabled"/>
-            <TextBlock Text="Suspending stops this key everywhere at once and keeps everything else, so it can be restored exactly as it was. To a caller it is indistinguishable from a key that was never issued."
+            <TextBlock Text="Unchecked, this user's key stops working everywhere and keeps its models and tools for when it is enabled again."
                        FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"/>
@@ -95,7 +95,7 @@
               <Button Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding HasUserSelected}"/>
             </StackPanel>
             <TextBlock IsVisible="{Binding HasUserSelected}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"
-                       Text="Rotating takes effect immediately and retires the previous key. Removing also drops this user's tool grants. Neither saves the form above."/>
+                       Text="Rotate replaces the key now. Remove takes the user, its models and its tools. Neither saves the form above."/>
           </StackPanel>
         </Border>
 
@@ -105,8 +105,8 @@
             <TextBlock Text="{Binding GeneratedKeyNotice}" TextWrapping="Wrap"/>
             <TextBox Text="{Binding GeneratedKey, Mode=OneWay}" IsReadOnly="True" PasswordChar="●"/>
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Copy new key" Click="OnCopyKey"/>
-              <Button Content="Dismiss key" Command="{Binding DismissKeyCommand}"/>
+              <Button Content="Copy key" Click="OnCopyKey"/>
+              <Button Content="Done" Command="{Binding DismissKeyCommand}"/>
             </StackPanel>
           </StackPanel>
         </Border>

@@ -86,7 +86,7 @@ public sealed partial class UsersViewModel : ViewModelBase
 
     public string EditorTitle => SelectedUser is { } row ? $"Edit user: {row.Name}" : "Add user";
 
-    public string SaveText => HasUserSelected ? "Save changes" : "Add user and generate key";
+    public string SaveText => HasUserSelected ? "Save changes" : "Add user";
 
     /// <summary>Why the stored directory could not be read, if it could not. No key is recognised while
     /// this is set and every save throws, so the page says so outright — otherwise Add looks broken.</summary>
@@ -100,8 +100,8 @@ public sealed partial class UsersViewModel : ViewModelBase
     /// never somewhere to stay — and invisible from the list, which shows users looking configured.
     /// </summary>
     public string? Warning => !KeysEnforced && Users.Count > 0
-        ? $"{Users.Count} user(s) exist, but keys are not being required — so every caller is treated as "
-          + "the single user and gets every tool. Turn on \"Require a key\" to make these users mean anything."
+        ? "A key is not required, so anything reaching this hub gets every tool whether it is a user or not. "
+          + "Turn on \"Require a key\" to make these users count."
         : null;
 
     public bool HasWarning => Warning is not null;
@@ -144,8 +144,8 @@ public sealed partial class UsersViewModel : ViewModelBase
         _permissions.SetAllowUnauthenticated(!value);
         RefreshWarning();
         StatusMessage = value
-            ? "Keys are now required. A caller with no key is refused on every surface."
-            : "Keys are no longer required. Every caller is served as the single user.";
+            ? "A key is now required. Only these users get in."
+            : "A key is no longer required. Anything reaching this hub gets every tool.";
     });
 
     partial void OnAdministerThroughProxyChanged(bool value) => Run(() =>
@@ -162,8 +162,8 @@ public sealed partial class UsersViewModel : ViewModelBase
         // restart.
         _ = _settings.SaveAsync();
         StatusMessage = value
-            ? "Callers granted the administration tools can now manage users and grants."
-            : "The users__ and permissions__ tools are switched off for every caller.";
+            ? "Users granted the users__ and permissions__ tools can now manage this hub."
+            : "The users__ and permissions__ tools are switched off.";
     });
 
     [RelayCommand]
@@ -192,7 +192,7 @@ public sealed partial class UsersViewModel : ViewModelBase
             _users.SetEnabled(row.Id, UserEnabled);
             Cancel();
             Refresh();
-            StatusMessage = $"'{name}' updated. Changes apply to its next call on every surface.";
+            StatusMessage = $"'{name}' saved. Applies to its next request.";
         }
         else
         {
@@ -200,7 +200,7 @@ public sealed partial class UsersViewModel : ViewModelBase
             Cancel();
             Refresh();
             ShowKey(created.Key, name.Length > 0 ? name : created.User.Id);
-            StatusMessage = $"'{name}' added. Copy its key before dismissing it — it cannot be recovered.";
+            StatusMessage = $"'{name}' added. Copy its key now — it is shown once.";
         }
     });
 
@@ -215,7 +215,7 @@ public sealed partial class UsersViewModel : ViewModelBase
         var key = _users.RotateKey(row.Id);
         Refresh();
         ShowKey(key, row.Name);
-        StatusMessage = "Key rotated. The previous key stopped working everywhere the moment this was issued.";
+        StatusMessage = "New key issued. The old one stopped working.";
     });
 
     [RelayCommand]
@@ -237,7 +237,7 @@ public sealed partial class UsersViewModel : ViewModelBase
         Cancel();
         DismissKey();
         Refresh();
-        StatusMessage = $"'{row.Name}' removed, its key retired, and its tool grants and Router route dropped.";
+        StatusMessage = $"'{row.Name}' removed, with its key, its models and its tools.";
     });
 
     [RelayCommand]
@@ -259,8 +259,7 @@ public sealed partial class UsersViewModel : ViewModelBase
     private void ShowKey(string key, string name)
     {
         GeneratedKey = key;
-        GeneratedKeyNotice = $"New key for {name}. Copy it now; only its hash is stored, so it cannot be "
-                             + "recovered. It works everywhere this hub checks a key.";
+        GeneratedKeyNotice = $"Key for {name}. Shown once — copy it now.";
     }
 
     private void Refresh()

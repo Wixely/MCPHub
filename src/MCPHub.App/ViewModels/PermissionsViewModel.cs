@@ -3,6 +3,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 using MCPHub.Core.Permissions;
 using MCPHub.Core.Users;
 using MCPHub.Proxy;
@@ -103,7 +105,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
 
     public bool HasExplanation => ExplainSummary.Length > 0;
 
-    public string EditorTitle => SelectedUser is { } row ? $"Grants for {row.Name}" : "Select a user";
+    public string EditorTitle => SelectedUser is { } row ? $"Tools for {row.Name}" : "Select a user";
 
     /// <summary>Why the stored document could not be read, if it could not. Nothing is granted while
     /// this is set and every save throws, so the page says so outright.</summary>
@@ -117,7 +119,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
     /// changed nothing.
     /// </summary>
     public string? SelectedUserWarning => SelectedUser is { Enabled: false } row
-        ? $"'{row.Name}' is suspended on the Users page, so none of these grants apply until it is enabled."
+        ? $"'{row.Name}' is suspended, so none of this applies until it is enabled on the Users page."
         : null;
 
     public bool HasSelectedUserWarning => SelectedUserWarning is not null;
@@ -133,6 +135,11 @@ public sealed partial class PermissionsViewModel : ViewModelBase
 
     partial void OnExplainSummaryChanged(string value) => OnPropertyChanged(nameof(HasExplanation));
 
+    /// <summary>Opens the Users page. This page can only name users, so the answer to "where do I make
+    /// one" should be a button rather than a sentence pointing at the nav bar.</summary>
+    [RelayCommand]
+    private void AddUser() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
+
     [RelayCommand]
     private void Save() => Run(() =>
     {
@@ -144,7 +151,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         var grants = ParseGrants(Grants);
         _permissions.SetGrants(row.Id, grants);
         Reselect(row.Id);
-        StatusMessage = $"'{row.Name}' now holds {grants.Length} grant(s). Applies to its next call.";
+        StatusMessage = $"'{row.Name}' may now use {grants.Length} tool(s). Applies to its next request.";
     });
 
     [RelayCommand]
@@ -178,14 +185,14 @@ public sealed partial class PermissionsViewModel : ViewModelBase
 
         if (SelectedUser is not { } row)
         {
-            ExplainSummary = "Select a user first.";
+            ExplainSummary = "Select a user above first.";
             return;
         }
 
         var tool = ExplainTool.Trim();
         if (tool.Length == 0)
         {
-            ExplainSummary = "Name a tool, as the proxy advertises it — for example mcphub__install.";
+            ExplainSummary = "Type a tool name, for example mcphub__install.";
             return;
         }
 
@@ -197,7 +204,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDenials));
         ExplainSummary = Denials.Count == 0
             ? $"'{row.Name}' can use {tool}."
-            : $"'{row.Name}' cannot use {tool}. {Denials.Count} reason(s) — all of them have to be fixed.";
+            : $"'{row.Name}' cannot use {tool} — {Denials.Count} reason(s), all of which need fixing.";
     });
 
     /// <summary>The server a namespaced tool belongs to; a bare name is its own key, which is what

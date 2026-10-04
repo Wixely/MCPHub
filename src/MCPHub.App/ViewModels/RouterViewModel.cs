@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 using MCPHub.Core.Routing;
 using MCPHub.Core.Users;
 
@@ -143,22 +145,22 @@ public sealed partial class RouterViewModel : ViewModelBase
     public string OutputEditorTitle => SelectedOutput is { } output ? $"Edit output: {output.Name}" : "Add model output";
 
     public string InputEditorTitle => SelectedInput is { } input
-        ? $"Router access for {NameOf(input.UserId)}"
-        : "Give a user Router access";
+        ? $"Models for {NameOf(input.UserId)}"
+        : "Give a user access";
 
     public string OutputSaveText => HasOutput ? "Save changes" : "Add output";
-    public string InputSaveText => HasInput ? "Save changes" : "Grant access";
+    public string InputSaveText => HasInput ? "Save changes" : "Give access";
 
     /// <summary>
-    /// Why the dropdown is empty, when it is. No key is issued here any more, so the only way to add a
-    /// caller is to pick one that exists — and a page offering an empty list with no explanation is the
-    /// kind of dead end that makes somebody think the feature is broken.
+    /// Why the dropdown is empty, when it is. No key is issued here any more, so the only way to add
+    /// somebody is to pick a user that exists — and an empty list with no explanation is the kind of
+    /// dead end that makes somebody think the feature is broken. Shown beside an "Add a user" button.
     /// </summary>
     public string? NoUsersHint => UserChoices.Count > 0
         ? null
         : _users.Snapshot.Users.Length == 0
-            ? "No users exist yet. Add one on the Users page; its key then works here and on the proxy."
-            : "Every user already has Router access. Edit one of the routes below, or add a user on the Users page.";
+            ? "No users yet."
+            : "Every user already has access. Edit one below, or add another user.";
 
     public bool HasNoUsersHint => NoUsersHint is not null;
     public string SavedDefaultSummary => DescribeDefault(_store.Snapshot);
@@ -172,22 +174,22 @@ public sealed partial class RouterViewModel : ViewModelBase
         get
         {
             var effect = RouterConfigurationRules.IsWildcard(BindAddress)
-                ? "Every network interface: agents on other machines can reach this Router, so keep agent keys private."
+                ? "Every network interface, so other machines can reach this. Keep user keys private."
                 : BindAddress == RouterConfigurationRules.Loopback
-                    ? "This machine only. Agents elsewhere on your network cannot connect."
+                    ? "This machine only."
                     : $"The interface with address {BindAddress} only.";
 
             if (!IsRunning) return effect + " Start the router to bind it.";
             var pending = !string.Equals(BindAddress.Trim(), _host.BindAddress, StringComparison.OrdinalIgnoreCase) || Port != _host.Port;
             return pending
-                ? $"{effect} Currently listening on {_host.BindAddress}:{_host.Port} — choose Apply listener to rebind without restarting MCPHub."
+                ? $"{effect} Still listening on {_host.BindAddress}:{_host.Port} — choose Apply listener to move it."
                 : $"{effect} Listening on {_host.BindAddress}:{_host.Port}.";
         }
     }
 
     /// <summary>Rejected-key activity, so a key that has been rotated out is visible as failing attempts.</summary>
     public string RejectionSummary => _activity is RouterActivityLog log && log.LastRejection is { } when
-        ? $"A key was last rejected {Describe(when)}. Check that each agent holds its current key."
+        ? $"A key was last rejected {Describe(when)}. Check each user holds its current key."
         : string.Empty;
 
     public bool HasRejections => RejectionSummary.Length > 0;
@@ -198,8 +200,8 @@ public sealed partial class RouterViewModel : ViewModelBase
         {
             var config = _store.Snapshot;
             var output = config.Outputs.FirstOrDefault(o => o.Id == (InputOutput?.Id ?? config.DefaultOutputId));
-            return output is null ? "No destination: choose an output or apply a global default before this agent can send requests."
-                : $"Destination after saving: {output.Name}. " + ModelSummary(output);
+            return output is null ? "Nowhere to send requests yet: choose an output, or set a global default."
+                : $"Goes to {output.Name} after saving. " + ModelSummary(output);
         }
     }
     public string CredentialStatus => SelectedOutput?.ProtectedApiKey is not null ? "An upstream key is stored. Leave blank to keep it." : "No upstream key stored. Leave blank for an unauthenticated local model.";
@@ -282,6 +284,11 @@ public sealed partial class RouterViewModel : ViewModelBase
     }
 
     partial void OnInputOutputChanged(RouterChoice? value) => OnPropertyChanged(nameof(InputRoutePreview));
+    /// <summary>Opens the Users page. This page can only name users, so the answer to "where do I make
+    /// one" should be a button rather than a sentence pointing at the nav bar.</summary>
+    [RelayCommand]
+    private void AddUser() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
+
     [RelayCommand] private void NewOutput() { SelectedOutput = null; OnSelectedOutputChanged(null); IsOutputEditorOpen = true; }
     [RelayCommand] private void NewInput() { SelectedInput = null; OnSelectedInputChanged(null); IsInputEditorOpen = true; }
     [RelayCommand] private void CancelOutput() { IsOutputEditorOpen = false; SelectedOutput = null; OnSelectedOutputChanged(null); }
@@ -309,7 +316,7 @@ public sealed partial class RouterViewModel : ViewModelBase
         _testResults.Remove(id);
         CancelOutput();
         Refresh();
-        StatusMessage = $"Output '{name}' saved. Use Test to check it answers, then assign it as a default or an agent destination.";
+        StatusMessage = $"Output '{name}' saved. Use Test to check it answers.";
     });
 
     [RelayCommand]
@@ -385,7 +392,9 @@ public sealed partial class RouterViewModel : ViewModelBase
         if (!IsInputEditorOpen) return;
         if (InputUser is not { } user)
         {
-            StatusMessage = NoUsersHint ?? "Choose a user to give Router access to.";
+            StatusMessage = UserChoices.Count == 0
+                ? "No users to give access to. Add one on the Users page first."
+                : "Choose a user first.";
             return;
         }
 
@@ -394,7 +403,7 @@ public sealed partial class RouterViewModel : ViewModelBase
         CancelInput();
         Refresh();
         StatusMessage = editing
-            ? $"'{user.Name}' re-routed. The change applies to its next request."
+            ? $"'{user.Name}' re-routed. Applies to its next request."
             : $"'{user.Name}' may now use the Router with the key it already holds.";
     });
 
@@ -413,7 +422,7 @@ public sealed partial class RouterViewModel : ViewModelBase
         _activity.Forget(input.UserId);
         CancelInput();
         Refresh();
-        StatusMessage = $"'{name}' can no longer use the Router. Its key still works wherever else it is granted.";
+        StatusMessage = $"'{name}' can no longer use the Router. Its key and tools are untouched.";
     });
 
     [RelayCommand]
@@ -421,7 +430,7 @@ public sealed partial class RouterViewModel : ViewModelBase
     {
         _store.SetDefault(DefaultOutput?.Id);
         Refresh();
-        StatusMessage = "Global default saved. Per-agent overrides are unchanged.";
+        StatusMessage = "Global default saved. Users with their own output are unchanged.";
     });
 
     /// <summary>

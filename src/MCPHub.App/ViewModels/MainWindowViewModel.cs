@@ -40,13 +40,12 @@ public partial class MainWindowViewModel : ViewModelBase
             new NavItem("Engine", slopworks),
             _logsNav,
             new NavItem("Proxy", proxy),
-            new NavItem("Router", router),
             new NavItem("Diagnostics", diagnostics),
             new NavItem("Recipes", recipes),
-            // Beside Recipes rather than inside Settings: between them they own a concept of their
-            // own — who may use this proxy — and the switches that belong to it are on the pages they
-            // govern. Users first, because a user has to exist before it can be granted anything.
+            // The three pages about users, in the order somebody uses them: make a user, let it reach
+            // models, let it reach tools. Users first, because the other two can only name one.
             new NavItem("Users", users),
+            new NavItem("Router", router),
             new NavItem("Permissions", permissions),
             new NavItem("Settings", settings),
             new NavItem("Updates", updates),
@@ -60,6 +59,14 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _logs.SelectService(message.ServiceName);
             SelectedNav = _logsNav;
+        });
+
+        // "Add a user" on the Router and Permissions pages: both have controls that need a user before
+        // they can do anything, so they send somebody there rather than naming the page in prose.
+        WeakReferenceMessenger.Default.Register<ShowPageMessage>(this, (_, message) =>
+        {
+            if (NavItems.FirstOrDefault(n => string.Equals(n.Title, message.Title, StringComparison.Ordinal)) is { } nav)
+                SelectedNav = nav;
         });
     }
 

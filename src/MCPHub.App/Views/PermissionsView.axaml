@@ -20,7 +20,7 @@
   <DockPanel Margin="24">
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
       <TextBlock Text="Permissions" FontSize="20" FontWeight="SemiBold"/>
-      <TextBlock Text="Which tools each user may use. Users and their keys are on the Users page — one key reaches every surface."
+      <TextBlock Text="Which tools each user may use. Users and their keys live on the Users page."
                  Opacity="0.65" TextWrapping="Wrap"/>
       <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontWeight="SemiBold"/>
     </StackPanel>
@@ -32,13 +32,15 @@
           <StackPanel Spacing="4">
             <TextBlock Text="Permissions are not loaded" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding ConfigurationError}" TextWrapping="Wrap"/>
-            <TextBlock Text="No user is granted any tool while this stands, and changes here will not save — the existing file is left untouched rather than overwritten."
+            <TextBlock Text="No user gets any tool, and nothing here will save. The file is left as it is."
                        FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
 
-        <TextBlock IsVisible="{Binding HasNoRows}" Opacity="0.7" TextWrapping="Wrap"
-                   Text="No users yet. Add one on the Users page to issue a key, then grant it tools here."/>
+        <StackPanel IsVisible="{Binding HasNoRows}" Spacing="8" HorizontalAlignment="Left">
+          <TextBlock Opacity="0.7" TextWrapping="Wrap" Text="No users yet. Add one, then grant it tools here."/>
+          <Button Content="Add a user" Command="{Binding AddUserCommand}"/>
+        </StackPanel>
 
         <ListBox IsVisible="{Binding HasRows}" ItemsSource="{Binding Rows}"
                  SelectedItem="{Binding SelectedUser}" MaxHeight="240">
@@ -62,12 +64,12 @@
                     BorderThickness="1" CornerRadius="6" Padding="10">
               <TextBlock Text="{Binding SelectedUserWarning}" TextWrapping="Wrap"/>
             </Border>
-            <TextBlock Text="Tool grants, one per line"/>
+            <TextBlock Text="Tools this user may use, one per line"/>
             <TextBox Text="{Binding Grants}" AcceptsReturn="True" MinHeight="100"
                      FontFamily="Cascadia Mono,Consolas,monospace"
                      Watermark="kodi__play_pause&#x0a;redis__*&#x0a;*"/>
             <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                       Text="An exact tool name, every tool of one server (redis__*), or everything (*). Use * only for an application you trust to administer this hub: it covers servers that are not installed yet, which is what makes installing possible, and it covers the users__ and permissions__ tools too."/>
+                       Text="A tool name, one whole server (redis__*), or everything (*). Everything includes servers not installed yet and the tools that manage this hub, so give it only to a user you trust to run the place."/>
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Button Content="Save grants" Command="{Binding SaveCommand}"/>
               <Button Content="Revoke all" Command="{Binding RevokeAllCommand}"/>
@@ -79,9 +81,9 @@
           <StackPanel Spacing="10">
             <TextBlock Text="Why can this user not use a tool?" FontSize="16" FontWeight="SemiBold"/>
             <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                       Text="A tool can be withheld by a grant, by a suspended user, and by a feature switch at the same time — and an environment variable can be pinning any of them. Granting the tool then changes nothing, which looks like the grant failed. This lists every reason at once."/>
+                       Text="Several things can withhold one tool at once, so fixing one changes nothing. This lists them all."/>
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <TextBox Text="{Binding ExplainTool}" Watermark="A tool name as the proxy advertises it, e.g. mcphub__install"/>
+              <TextBox Text="{Binding ExplainTool}" Watermark="Tool name, e.g. mcphub__install"/>
               <Button Grid.Column="1" Content="Explain" Command="{Binding ExplainCommand}"/>
             </Grid>
             <TextBlock IsVisible="{Binding HasExplanation}" Text="{Binding ExplainSummary}" TextWrapping="Wrap" FontWeight="SemiBold"/>
@@ -94,7 +96,7 @@
                       <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" FontWeight="SemiBold"/>
                       <TextBlock IsVisible="{Binding HasRemedy}" Text="{Binding Remedy}" TextWrapping="Wrap" Opacity="0.8"/>
                       <TextBlock IsVisible="{Binding IsPinned}" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="12"
-                                 Text="{Binding PinnedBy, StringFormat='Forced by the environment: {0} — changing the setting here will not help.'}"/>
+                                 Text="{Binding PinnedBy, StringFormat='Set by the environment: {0}. Changing it here will not help.'}"/>
                       <TextBlock Text="{Binding Code}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" Opacity="0.5"/>
                     </StackPanel>
                   </Border>

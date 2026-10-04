@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Routing;
@@ -24,7 +26,7 @@ public sealed class RouterViewModelTests
         Assert.Empty(f.Store.Snapshot.Outputs);
         f.AddUser();
         f.Vm.NewInputCommand.Execute(null);
-        Assert.Equal("Give a user Router access", f.Vm.InputEditorTitle);
+        Assert.Equal("Give a user access", f.Vm.InputEditorTitle);
         f.Vm.CancelInputCommand.Execute(null);
         Assert.False(f.Vm.IsInputEditorOpen);
         Assert.Empty(f.Store.Snapshot.Inputs);
@@ -57,7 +59,7 @@ public sealed class RouterViewModelTests
         var user = f.AddUser("Coding agent");
         f.Vm.NewInputCommand.Execute(null);
 
-        Assert.Equal("Give a user Router access", f.Vm.InputEditorTitle);
+        Assert.Equal("Give a user access", f.Vm.InputEditorTitle);
         Assert.Equal("Coding agent", Assert.Single(f.Vm.UserChoices).Name);
         Assert.Null(f.Vm.NoUsersHint);
 
@@ -84,29 +86,52 @@ public sealed class RouterViewModelTests
 
         f.Vm.NewInputCommand.Execute(null);
         Assert.Empty(f.Vm.UserChoices);
-        Assert.Contains("already has Router access", f.Vm.NoUsersHint!);
+        Assert.Contains("already has access", f.Vm.NoUsersHint!);
 
         f.Vm.InputRows.Single().EditCommand.Execute(null);
         Assert.Equal("Only agent", Assert.Single(f.Vm.UserChoices).Name);
-        Assert.Equal("Router access for Only agent", f.Vm.InputEditorTitle);
+        Assert.Equal("Models for Only agent", f.Vm.InputEditorTitle);
     }
 
     /// <summary>With nobody to grant, the page says where users come from rather than offering an empty
     /// list and a button that does nothing.</summary>
     [Fact]
-    public async Task With_no_users_at_all_the_editor_says_where_they_come_from()
+    public async Task With_no_users_at_all_the_editor_says_so_and_offers_to_make_one()
     {
         await using var f = new Fixture();
         f.Vm.NewInputCommand.Execute(null);
 
         Assert.Empty(f.Vm.UserChoices);
         Assert.True(f.Vm.HasNoUsersHint);
-        Assert.Contains("Users page", f.Vm.NoUsersHint!);
 
         f.Vm.SaveInputCommand.Execute(null);
 
         Assert.Empty(f.Store.Snapshot.Inputs);
         Assert.Contains("Users page", f.Vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// And the way out is a button, not a sentence: this page can only name users, so "add a user" has
+    /// to take somebody to where users are made rather than tell them to go and find it.
+    /// </summary>
+    [Fact]
+    public async Task Add_a_user_opens_the_users_page()
+    {
+        await using var f = new Fixture();
+        var asked = new List<string>();
+        var subscriber = new object();
+        WeakReferenceMessenger.Default.Register<ShowPageMessage>(subscriber, (_, m) => asked.Add(m.Title));
+
+        try
+        {
+            f.Vm.AddUserCommand.Execute(null);
+        }
+        finally
+        {
+            WeakReferenceMessenger.Default.UnregisterAll(subscriber);
+        }
+
+        Assert.Equal("Users", Assert.Single(asked));
     }
 
     /// <summary>
@@ -159,7 +184,7 @@ public sealed class RouterViewModelTests
         f.AddOutput();
         Assert.True(f.Vm.IsInputEditorOpen);
         Assert.Equal("Draft agent", f.Vm.InputUser!.Name);
-        Assert.Equal("Give a user Router access", f.Vm.InputEditorTitle);
+        Assert.Equal("Give a user access", f.Vm.InputEditorTitle);
         f.Vm.OutputRows.Single().EditCommand.Execute(null);
         f.Vm.OutputName = "Draft output rename";
         f.Vm.SaveInputCommand.Execute(null);
@@ -184,7 +209,7 @@ public sealed class RouterViewModelTests
         Assert.Equal("Global default → Local model", f.Vm.InputRows.Single().RouteSummary);
         f.Vm.InputRows.Single().EditCommand.Execute(null);
         f.Vm.InputOutput = f.Vm.InputChoices[1];
-        Assert.StartsWith("Destination after saving: Local model", f.Vm.InputRoutePreview);
+        Assert.StartsWith("Goes to Local model", f.Vm.InputRoutePreview);
         Assert.Equal("Global default → Local model", f.Vm.InputRows.Single().RouteSummary);
         f.Vm.SaveInputCommand.Execute(null);
         Assert.Equal("Assigned output → Local model", f.Vm.InputRows.Single().RouteSummary);

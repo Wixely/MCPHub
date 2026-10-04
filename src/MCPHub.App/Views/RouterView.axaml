@@ -22,7 +22,7 @@
   <DockPanel Margin="24">
       <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
         <TextBlock Text="Model Router" FontSize="20" FontWeight="SemiBold"/>
-        <TextBlock Text="One endpoint for every agent. Choose who may use it and where their requests go." Opacity="0.65"/>
+        <TextBlock Text="One model endpoint. Choose which users may use it and where their requests go." Opacity="0.65"/>
         <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" FontWeight="SemiBold"/>
       </StackPanel>
   <ScrollViewer>
@@ -32,7 +32,7 @@
         <StackPanel Spacing="4">
           <TextBlock Text="Router configuration is not loaded" FontWeight="SemiBold"/>
           <TextBlock Text="{Binding ConfigurationError}" TextWrapping="Wrap"/>
-          <TextBlock Text="Until it is, adding or changing outputs and routes will not save — the existing file is left untouched rather than overwritten."
+          <TextBlock Text="Nothing here will save until it is. The file is left as it is."
                      FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
         </StackPanel>
       </Border>
@@ -59,7 +59,7 @@
             <Button Content="Apply listener" Command="{Binding ApplyListenerCommand}"/>
           </WrapPanel>
           <TextBlock Text="{Binding ListenerSummary}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
-          <TextBlock Text="Set each agent's API base URL to the address above and use its user key — the one issued on the Users page — as the API key."
+          <TextBlock Text="Point a user at this address, using its key as the API key."
                      FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         </StackPanel>
       </Border>
@@ -72,7 +72,7 @@
           </ComboBox>
           <Button Grid.Column="1" Content="Apply default" Command="{Binding SaveDefaultCommand}"/>
         </Grid>
-        <TextBlock Text="Used by routes without an override. Changing it leaves per-user overrides intact." FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        <TextBlock Text="Where users go unless given their own output." FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         <TextBlock Text="{Binding SavedDefaultSummary}" TextWrapping="Wrap"/>
       </StackPanel>
 
@@ -85,7 +85,7 @@
             <Button Content="Add output" Command="{Binding NewOutputCommand}" IsEnabled="{Binding !IsOutputEditorOpen}"/>
           </StackPanel>
         </Grid>
-        <TextBlock Text="Saved destinations for model requests. Test checks that an output answers on its stored key; Edit changes it." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="Where model requests go. Test asks an output for its model list; it generates nothing and costs nothing." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
         <TextBlock Text="No outputs yet. Add an output to connect a model provider." IsVisible="{Binding HasNoOutputs}" TextWrapping="Wrap"/>
         <ItemsControl ItemsSource="{Binding OutputRows}" IsEnabled="{Binding !IsOutputEditorOpen}">
           <ItemsControl.ItemTemplate>
@@ -118,10 +118,10 @@
           <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OutputBaseUrl}" Watermark="http://localhost:8000/v1"/>
           <TextBlock Grid.Row="2" Text="Model sent to provider (optional)"/>
           <TextBlock Grid.Row="2" Grid.Column="1" Text="Upstream bearer key (optional)"/>
-          <TextBox Grid.Row="3" Text="{Binding OutputModel}" Watermark="Leave blank to use the agent's model"/>
+          <TextBox Grid.Row="3" Text="{Binding OutputModel}" Watermark="Leave blank to use whatever model the user asks for"/>
           <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding OutputApiKey}" PasswordChar="●" Watermark="Enter a key to replace the stored key"/>
         </Grid>
-        <TextBlock Text="The model setting applies only after an agent is routed to this output. It does not assign any agents."
+        <TextBlock Text="Applies to users routed here. Setting it assigns nobody."
                    FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         <TextBlock Text="{Binding CredentialStatus}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         <CheckBox Content="Clear stored upstream key on save" IsChecked="{Binding ClearOutputKey}" IsVisible="{Binding HasOutput}"/>
@@ -136,12 +136,15 @@
 
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="Agents" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
-          <Button Grid.Column="1" Content="Give a user access" Command="{Binding NewInputCommand}" IsEnabled="{Binding !IsInputEditorOpen}"/>
+          <TextBlock Text="Users" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="Add a user" Command="{Binding AddUserCommand}"/>
+            <Button Content="Give a user access" Command="{Binding NewInputCommand}" IsEnabled="{Binding !IsInputEditorOpen}"/>
+          </StackPanel>
         </Grid>
-        <TextBlock Text="An agent here is a user from the Users page, using the key it already holds. Routes reflect saved settings, and each row shows when that user last reached the Router." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="Users allowed to use this endpoint, each with the key it already holds." Opacity="0.65" FontSize="12" TextWrapping="Wrap"/>
         <TextBlock Text="{Binding RejectionSummary}" IsVisible="{Binding HasRejections}" FontSize="12" TextWrapping="Wrap"/>
-        <TextBlock Text="Nobody may use the Router yet. Give a user access and its existing key starts working here." IsVisible="{Binding HasNoInputs}" TextWrapping="Wrap"/>
+        <TextBlock Text="No user may use the Router yet." IsVisible="{Binding HasNoInputs}" TextWrapping="Wrap"/>
         <ItemsControl ItemsSource="{Binding InputRows}" IsEnabled="{Binding !IsInputEditorOpen}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:RouterInputRow">
@@ -163,10 +166,9 @@
                 BorderBrush="{DynamicResource RouterEditorBorder}" BorderThickness="1" CornerRadius="8" Padding="16">
         <StackPanel Spacing="10">
         <TextBlock Text="{Binding InputEditorTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
-        <TextBlock Text="Changes stay in this form until you save." FontSize="12" Opacity="0.65"/>
         <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="6">
           <TextBlock Text="User"/>
-          <TextBlock Grid.Column="1" Text="Destination output"/>
+          <TextBlock Grid.Column="1" Text="Output"/>
           <ComboBox Grid.Row="1" ItemsSource="{Binding UserChoices}" SelectedItem="{Binding InputUser}" HorizontalAlignment="Stretch">
             <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:RouterUserChoice"><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate>
           </ComboBox>
@@ -174,17 +176,19 @@
             <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:RouterChoice"><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
           </ComboBox>
         </Grid>
-        <TextBlock Text="{Binding NoUsersHint}" IsVisible="{Binding HasNoUsersHint}" TextWrapping="Wrap"/>
+        <StackPanel IsVisible="{Binding HasNoUsersHint}" Spacing="8" HorizontalAlignment="Left">
+          <TextBlock Text="{Binding NoUsersHint}" TextWrapping="Wrap"/>
+          <Button Content="Add a user" Command="{Binding AddUserCommand}"/>
+        </StackPanel>
         <TextBlock Text="{Binding InputRoutePreview}" TextWrapping="Wrap"/>
-        <TextBlock Text="No key is issued here: the user uses the one it was given on the Users page, and suspending it there stops it everywhere at once."
-                   FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
+        <TextBlock Text="The user keeps the key it already has." FontSize="12" Opacity="0.65" TextWrapping="Wrap"/>
         <WrapPanel>
           <Button Content="{Binding InputSaveText}" Command="{Binding SaveInputCommand}" Margin="0,0,8,0"/>
           <Button Content="Cancel" Command="{Binding CancelInputCommand}" Margin="0,0,24,0"/>
-          <Button Content="Revoke Router access" Command="{Binding RemoveInputCommand}" IsVisible="{Binding HasInput}"/>
+          <Button Content="Remove access" Command="{Binding RemoveInputCommand}" IsVisible="{Binding HasInput}"/>
         </WrapPanel>
         <TextBlock IsVisible="{Binding HasInput}" FontSize="12" Opacity="0.65" TextWrapping="Wrap"
-                   Text="Revoking takes away the Router only. The user keeps its key and whatever tools it is granted on the Permissions page."/>
+                   Text="Removing access takes away models only. The user keeps its key and its tools."/>
         </StackPanel>
         </Border>
       </StackPanel>

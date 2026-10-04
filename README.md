@@ -99,13 +99,13 @@ The buttons:
 
 ### Router
 
-The **Router** page gives agents a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Then give a user from the **Users** page Router access: it uses the key it already holds, so one credential reaches both the models here and the tools on the proxy.
+The **Router** page gives users a stable local OpenAI-compatible model endpoint, separate from the MCP tool proxy. Add model outputs with their API base URLs, optional upstream bearer keys, and optional model overrides. Then give a user from the **Users** page access: it uses the key it already holds, so one key reaches the models here and the tools on Permissions.
 
-Giving access is not the same as being a user: somebody created for tools alone has no Router access until it is granted here, and revoking it leaves the user and its key untouched. Suspending the user on the Users page stops both at once.
+Access is separate from existing: a user made for tools alone cannot reach models until it is given access here, and removing access leaves its key and its tools untouched. Suspending it on the Users page stops everything at once.
 
-Choose a **global default** output, or give individual inputs an override. Route changes apply to new requests without changing agent configuration; requests already streaming finish on their original output.
+Choose a **global default** output, or give a user its own. Changes apply to the next request without reconfiguring anything at the far end; requests already streaming finish where they started.
 
-**Test** an output to check it answers on its stored key before an agent depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each row shows when that user last reached the Router, how many requests it has made, and whether it is suspended.
+**Test** an output before a user depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each row shows when that user last reached the Router, how many requests it has made, and whether it is suspended.
 
 The Router is off by default and listens on `http://127.0.0.1:5801/v1`. Set **Bind address** to `0.0.0.0` to accept connections from your network, or to one interface's address to bind that network alone; **Apply listener** rebinds a running Router immediately, without restarting MCPHub.
 
@@ -154,30 +154,32 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 
 ### Users
 
-Who may use this hub. One user, one key, every surface: a caller is created once here and then selected on the Permissions and Router pages, rather than being set up again — with a key that could never match — on each one. A `router.json` written before this page existed is migrated on first load, so every key the old Router issued keeps working and starts working on the proxy too.
+Who may use this hub. A user is made once here and holds one key; **Router** then decides which models it may reach and **Permissions** which tools. Those two pages only ever name users made here, which is why they sit together in the sidebar.
 
-By default nobody needs a key: MCPHub binds loopback, every caller is the single user, and all tools are visible — which is how it has always worked on your own machine. Turn on **Require a key** and that changes: a caller presenting no key is refused, and a caller presenting one sees only what that user is granted on the Permissions page.
+By default no key is required: MCPHub binds loopback and anything reaching it gets every tool, which is how it has always worked on your own machine. Turn on **Require a key** and only these users get in, each seeing only what it has been given.
 
-Add a user and MCPHub issues its key, **shown once**. Only the hash is stored, so a lost key is rotated rather than looked up; the list shows the first eight characters of the hash, which is enough to tell two keys apart and no use for getting in. Rotating takes effect immediately and retires the previous key everywhere.
+Adding a user issues its key, **shown once** — only the hash is stored, so a lost key is rotated rather than looked up. The list shows the first eight characters of the hash, enough to tell two keys apart and no use for getting in.
 
-Suspending is the one switch that stops everything: the user keeps its name and its grants and its key stops being recognised, on every surface, at once. To the caller it is indistinguishable from a key that was never issued, and enabling it again restores exactly what it had. Removing a user retires its key and drops its tool grants with it, so nothing is left granting tools to an id nobody holds.
+Unchecking **Enabled** suspends a user: its key stops working everywhere at once, and its models and tools are kept for when it is enabled again. Removing takes the user, its key, its models and its tools together.
+
+A `router.json` written before this page existed is migrated on first load, so every key the old Router issued keeps working — and now works on the proxy too.
 
 | Switch | Does | Headless / Docker flag |
 | --- | --- | --- |
-| **Require a key** | Refuses callers that present no key; each key resolves to one user, which sees only its grants. Off, every caller is the single user and gets everything. | Set in the permissions document |
-| **Let callers administer this hub through the proxy** | Exposes `users__*` and `permissions__*` so another application can manage identity and policy. **Off by default** — these tools govern every other tool, so a caller holding them can issue itself a key and grant itself anything. | `MCPHUB_ADMINISTRATION_ENABLED=true` |
+| **Require a key** | Off, anything reaching this hub gets every tool. On, only these users do, each seeing only what it has been given. | Set in the permissions document |
+| **Let users manage this hub** | Exposes `users__*` and `permissions__*`, so another application can add users and grant tools. **Off by default** — a user holding them can grant itself anything. | `MCPHUB_ADMINISTRATION_ENABLED=true` |
 
-A warning appears when users exist while a key is not required: their grants are inert, because every caller is being served as the single user and getting everything regardless. It is a reasonable state to pass through while setting a hub up and never one to stay in.
+A warning appears when users exist while a key is not required: nothing they have been given applies, because everything is being let in regardless. Reasonable while setting a hub up, never somewhere to stay.
 
 ### Permissions
 
-Which tools each user may use. Identity is the Users page's business; this page is grants only, and a user with no grants may use no tools — absence is the default so that issuing a key is not the same act as handing over the hub.
+Which tools each user may use. Users themselves are on the **Users** page, and a user starts with no tools at all — issuing a key is not the same as handing over the hub.
 
-A grant is an exact tool name (`kodi__play_pause`), every tool of one server (`kodi__*`), or everything (`*`). Use `*` only for an application you trust to administer the hub: it covers servers that are not installed yet, which is what makes installing possible, and it covers the administration tools too.
+Give a tool name (`kodi__play_pause`), one whole server (`kodi__*`), or everything (`*`). Everything includes servers that are not installed yet, which is what makes installing possible, and the tools that manage this hub, so give it only to a user you trust to run the place.
 
-Every user is listed whether or not it holds grants, because somebody with a key and nothing granted is exactly the case worth seeing. A user suspended on the Users page is flagged here as well — its grants are real and apply to nothing until it is enabled.
+Every user is listed whether or not it has been given anything, since a user with a key and nothing else is exactly the case worth seeing. A suspended user is flagged here too — what it has been given applies to nothing until it is enabled.
 
-**Why can this caller not use a tool?** The box at the bottom of the page answers it. Tool access is decided by several independent things at once — the user's grants, whether it is suspended, whether agent management is on, whether the capability beneath it is on, and whether an environment variable is pinning any of them — so a tool can be withheld for more than one reason. Name a user and a tool and every reason is listed, each with what to change and the variable forcing it where one is. Without that, granting a tool and seeing no change looks like the grant failed, when a switch was also off all along.
+**Why can this user not use a tool?** The box at the bottom answers it. Several things can withhold one tool at once — what the user has been given, whether it is suspended, a feature switch, an environment variable pinning one of those — so fixing one changes nothing and looks like the fix failed. Name a user and a tool and every reason is listed, each with what to change.
 
 ### Agent
 

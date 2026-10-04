@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Management;
 using MCPHub.Core.Permissions;
@@ -75,6 +77,30 @@ public sealed class PermissionsViewModelTests : IDisposable
         Assert.False(f.Vm.HasUserSelected);
     }
 
+    /// <summary>
+    /// And offers the way out as a button: this page can only name users, so "add a user" has to take
+    /// somebody to where users are made rather than tell them to go and find the page.
+    /// </summary>
+    [Fact]
+    public void Add_a_user_opens_the_users_page()
+    {
+        var f = Build();
+        var asked = new List<string>();
+        var subscriber = new object();
+        WeakReferenceMessenger.Default.Register<ShowPageMessage>(subscriber, (_, m) => asked.Add(m.Title));
+
+        try
+        {
+            f.Vm.AddUserCommand.Execute(null);
+        }
+        finally
+        {
+            WeakReferenceMessenger.Default.UnregisterAll(subscriber);
+        }
+
+        Assert.Equal("Users", Assert.Single(asked));
+    }
+
     // ---- editing grants ------------------------------------------------------------------------
 
     [Fact]
@@ -88,7 +114,7 @@ public sealed class PermissionsViewModelTests : IDisposable
         reloaded.Vm.SelectedUser = reloaded.Vm.Rows.Single();
 
         Assert.True(reloaded.Vm.HasUserSelected);
-        Assert.Contains("Grants for agent", reloaded.Vm.EditorTitle, StringComparison.Ordinal);
+        Assert.Contains("Tools for agent", reloaded.Vm.EditorTitle, StringComparison.Ordinal);
         Assert.Equal($"kodi__*{Environment.NewLine}redis__get", reloaded.Vm.Grants);
     }
 
