@@ -1,6 +1,11 @@
 # Headless model router
 
-This runnable sample proves that a future Docker/server version of MCPHub can host its model router without the desktop application. It runs **only the model Router**, not the MCP proxy, catalogue manager, agent manager or desktop UI. It references `MCPHub.Core`; its runtime dependency graph contains no Avalonia or `MCPHub.App`.
+> **MCPHub itself now hosts the Router.** `src/MCPHub.Server` carries both listeners and switches
+> them independently — proxy, Router, or both — over one users document. Prefer it. This sample
+> remains for the case it does not cover: configuration mounted **read-only**, with keys read from
+> secret files or the environment and nothing written back.
+
+This runnable sample proves that a Docker/server version of MCPHub can host its model router without the desktop application. It runs **only the model Router**, not the MCP proxy, catalogue manager, agent manager or desktop UI. It references `MCPHub.Core`; its runtime dependency graph contains no Avalonia or `MCPHub.App`.
 
 ## Run locally
 

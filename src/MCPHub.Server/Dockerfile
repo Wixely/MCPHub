@@ -19,10 +19,17 @@ COPY --from=build /out/ ./
 # Both are written to: identity, permissions and routes are edited through the management tools,
 # which is the reason to run this headless at all. Mount them, or they live and die with the
 # container — a hub that forgets every key it issued on restart is worse than one that will not start.
-ENV MCPHUB_CONFIG_DIR=/config MCPHUB_DATA_DIR=/data MCPHUB_PROXY_BIND=0.0.0.0 MCPHUB_PROXY_PORT=5800
+ENV MCPHUB_CONFIG_DIR=/config
+ENV MCPHUB_DATA_DIR=/data
+ENV MCPHUB_PROXY_BIND=0.0.0.0
+ENV MCPHUB_PROXY_PORT=5800
+ENV MCPHUB_ROUTER_BIND=0.0.0.0
+ENV MCPHUB_ROUTER_PORT=5801
 RUN mkdir -p /config /data && chown -R $APP_UID:$APP_UID /config /data
 VOLUME ["/config", "/data"]
 
 USER $APP_UID
-EXPOSE 5800
+# The proxy and the Router. Both are declared; which actually binds is MCPHUB_PROXY_ENABLED and
+# MCPHUB_ROUTER_ENABLED, and publishing a port nothing is listening on is harmless.
+EXPOSE 5800 5801
 ENTRYPOINT ["dotnet", "MCPHub.Server.dll"]

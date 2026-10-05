@@ -4,12 +4,20 @@ services:
       context: ../..
       dockerfile: src/MCPHub.Server/Dockerfile
     ports:
-      # Loopback on the host: the proxy serves every tool this hub has, and whether a caller needs a
-      # key is a choice made inside it. Publish wider only once per-user permissions are on.
+      # Loopback on the host. The proxy serves every tool this hub has and the Router forwards to
+      # whatever your outputs are, and whether a caller needs a key is a choice made inside the
+      # container. Publish either one wider only once per-user permissions are on.
       - "127.0.0.1:5800:5800"
+      - "127.0.0.1:5801:5801"
     environment:
+      # Two listeners, switched independently: tools here, models there, one users document behind
+      # both. Either can be turned off; turning off both is refused at startup.
+      MCPHUB_PROXY_ENABLED: "true"
       MCPHUB_PROXY_BIND: 0.0.0.0
       MCPHUB_PROXY_PORT: "5800"
+      MCPHUB_ROUTER_ENABLED: "true"
+      MCPHUB_ROUTER_BIND: 0.0.0.0
+      MCPHUB_ROUTER_PORT: "5801"
       # The users__ and permissions__ tools, so another application — Banter, say — can add users
       # and grant tools over the same MCP endpoint it uses for everything else. Off without this.
       MCPHUB_ADMINISTRATION_ENABLED: "true"

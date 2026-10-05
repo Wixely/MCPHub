@@ -295,6 +295,11 @@ MCPHub also runs without a window: the same hub, hosted by a container's lifetim
 desktop's. It serves the same `/mcp` endpoint with the same tools, the same users and the same
 permissions — one hub with two heads, rather than a second, thinner one that would drift.
 
+It carries both listeners, switched independently: the **MCP proxy** on 5800 and the **Model Router**
+on 5801. Run one, the other, or both. They are one image because they are one hub — the same users
+document answers for both, so a key reaches a tool and a model, and suspending that user stops both.
+Two containers would mean two copies of that document and nothing keeping them in agreement.
+
 ```powershell
 docker compose -f src/MCPHub.Server/compose.yaml up --build
 ```
@@ -314,9 +319,18 @@ Point an MCP client at `http://127.0.0.1:5800/mcp`, exactly as for the desktop.
 | --- | --- |
 | `MCPHUB_CONFIG_DIR` | Where settings, users, permissions and routes live. `/config` in the image. |
 | `MCPHUB_DATA_DIR` | Where downloaded servers and their working files live. `/data` in the image. |
-| `MCPHUB_PROXY_BIND` | What the listener binds. `0.0.0.0` here — loopback would be reachable only from inside the container. |
-| `MCPHUB_PROXY_PORT` | The port inside the container. 5800 by default. A value that is not a port stops the process rather than binding a different one. |
+| `MCPHUB_PROXY_ENABLED` | Whether to serve the MCP proxy. **On** unless switched off. |
+| `MCPHUB_PROXY_BIND` | What the proxy binds. `0.0.0.0` here — loopback would be reachable only from inside the container. |
+| `MCPHUB_PROXY_PORT` | The proxy's port inside the container. 5800 by default. |
+| `MCPHUB_ROUTER_ENABLED` | Whether to serve the Model Router. **Off** unless asked for: it forwards to upstream providers, and a listener with no outputs configured answers every request with a 503. |
+| `MCPHUB_ROUTER_BIND` | What the Router binds. The same variable name the standalone Router host used. |
+| `MCPHUB_ROUTER_PORT` | The Router's port inside the container. 5801 by default. |
 | `MCPHUB_ADMINISTRATION_ENABLED` | Exposes `users__*` and `permissions__*`, so another application can add users and grant tools over the same endpoint. **Off unless set** — the same variable, with the same meaning, as the desktop's switch. |
+
+A port that is not a port stops the process rather than binding a different one, and so does asking
+for both listeners on one address and port — Kestrel's own answer to that is a bind error naming
+neither of them. Switching both off is refused too: a container that starts, logs nothing wrong and
+answers nothing is indistinguishable from a broken one.
 
 Both directories are written to. Identity, permissions and routes are edited through the management
 tools, which is the reason to run this headless at all, so mount them — a hub that forgets every key
@@ -343,8 +357,9 @@ are off here as they are on the desktop: installing binaries into a container me
 and an image that can run what it downloads, which is a deployment's decision rather than a default.
 `MCPHUB_AGENT_MANAGEMENT_ENABLED=true` turns them on.
 
-The Model Router is not in this image. The [headless Router sample](samples/HeadlessRouter/README.md)
-hosts that on its own, with the same users document.
+The [headless Router sample](samples/HeadlessRouter/README.md) still exists for one case this image
+does not cover: configuration mounted **read-only**, with keys read from secret files or the
+environment and nothing written back. This image writes — that is what makes it administrable.
 
 ## Where things live
 
