@@ -103,6 +103,8 @@ The **Router** page gives users a stable local OpenAI-compatible model endpoint,
 
 Access is separate from existing: a user made for tools alone cannot reach models until it is given access here, and removing access leaves its key and its tools untouched. Suspending it on the Users page stops everything at once.
 
+The Router is the one exception to **Enable all users**: it has no no-key mode, so only the users listed here can reach the endpoint whichever way the hub is set. A banner says so while everyone is allowed elsewhere, since a flat `401` with nothing on screen explaining it is the alternative.
+
 Choose a **global default** output, or give a user its own. Changes apply to the next request without reconfiguring anything at the far end; requests already streaming finish where they started.
 
 **Test** an output before a user depends on it — it asks the provider for its model list, generates no tokens, and reports a bad URL, a rejected key or a model name the provider does not offer. Each row shows when that user last reached the Router, how many requests it has made, and whether it is suspended.
@@ -176,6 +178,8 @@ A warning appears when users exist while a key is not required: nothing they hav
 ### Permissions
 
 Which tools each user may use. Users themselves are on the **Users** page, and a user starts with no tools at all — issuing a key is not the same as handing over the hub.
+
+While **Enable all users** is on, a banner says so: every program already gets every tool, so nothing set here applies until per-user permissions are on.
 
 Pick tools with checkboxes. **Services** lists one box per MCP service and the hub's own groups — ticking one grants that service whole, including tools it adds later. **Every tool** lists them all with a filter, so a run of rows can be selected and ticked with Space, and **Select all** / **Select none** work on whatever the filter is showing. Ticking every tool of a service is the same as ticking the service, so switching between the two lists never changes what a user is allowed.
 

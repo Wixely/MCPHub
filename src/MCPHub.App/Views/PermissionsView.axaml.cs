@@ -6,7 +6,14 @@ namespace MCPHub.App.Views;
 
 public partial class PermissionsView : UserControl
 {
-    public PermissionsView() => InitializeComponent();
+    public PermissionsView()
+    {
+        InitializeComponent();
+
+        // Whether any of this applies is decided on the Users page, so it is re-read on the way in
+        // rather than when this page was last built.
+        AttachedToVisualTree += (_, _) => (DataContext as PermissionsViewModel)?.RefreshPolicy();
+    }
 
     /// <summary>
     /// Space ticks whatever is selected, which is how a long list of checkboxes is meant to be worked:

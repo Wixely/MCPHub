@@ -145,6 +145,26 @@ public sealed partial class PermissionsViewModel : ViewModelBase
     public bool HasConfigurationError => ConfigurationError is not null;
 
     /// <summary>
+    /// Set while everyone is allowed, because then nothing on this page does anything: every caller is
+    /// served every tool whether it is a user or not. The list underneath shows users looking carefully
+    /// configured, which is exactly why it has to be said at the top.
+    /// </summary>
+    public string? PolicyWarning => _permissions.Snapshot.AllowUnauthenticated
+        ? "Everyone is allowed, so every program reaching this hub already gets every tool — whatever is "
+          + "set here. Choose per-user permissions on the Users page to make this count."
+        : null;
+
+    public bool HasPolicyWarning => PolicyWarning is not null;
+
+    /// <summary>Re-reads the switch that decides whether any of this applies. Called when the page is
+    /// shown, since the choice is made on another one.</summary>
+    public void RefreshPolicy()
+    {
+        OnPropertyChanged(nameof(PolicyWarning));
+        OnPropertyChanged(nameof(HasPolicyWarning));
+    }
+
+    /// <summary>
     /// Set when the selected user is suspended: its grants are real and apply to nothing, which is
     /// worth saying on the page that edits them rather than leaving somebody to wonder why a grant
     /// changed nothing.
@@ -342,10 +362,11 @@ public sealed partial class PermissionsViewModel : ViewModelBase
 
     partial void OnExplainSummaryChanged(string value) => OnPropertyChanged(nameof(HasExplanation));
 
-    /// <summary>Opens the Users page. This page can only name users, so the answer to "where do I make
-    /// one" should be a button rather than a sentence pointing at the nav bar.</summary>
+    /// <summary>Opens the Users page. This page can only name users and cannot change how they are
+    /// checked, so both answers to "where do I do that" should be a button rather than a sentence
+    /// pointing at the nav bar.</summary>
     [RelayCommand]
-    private void AddUser() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
+    private void OpenUsers() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
 
     [RelayCommand]
     private void Save() => Run(() =>
@@ -558,6 +579,7 @@ public sealed partial class PermissionsViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasNoRows));
         OnPropertyChanged(nameof(ConfigurationError));
         OnPropertyChanged(nameof(HasConfigurationError));
+        RefreshPolicy();
     }
 
     private void Run(Action action)

@@ -37,9 +37,18 @@
           </StackPanel>
         </Border>
 
+        <Border IsVisible="{Binding HasPolicyWarning}" Background="#33D29922" BorderBrush="#66D29922"
+                BorderThickness="1" CornerRadius="8" Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Nothing here applies yet" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding PolicyWarning}" TextWrapping="Wrap"/>
+            <Button Content="Go to Users" Command="{Binding OpenUsersCommand}" HorizontalAlignment="Left"/>
+          </StackPanel>
+        </Border>
+
         <StackPanel IsVisible="{Binding HasNoRows}" Spacing="8" HorizontalAlignment="Left">
           <TextBlock Opacity="0.7" TextWrapping="Wrap" Text="No users yet. Add one, then grant it tools here."/>
-          <Button Content="Add a user" Command="{Binding AddUserCommand}"/>
+          <Button Content="Add a user" Command="{Binding OpenUsersCommand}"/>
         </StackPanel>
 
         <ListBox IsVisible="{Binding HasRows}" ItemsSource="{Binding Rows}"

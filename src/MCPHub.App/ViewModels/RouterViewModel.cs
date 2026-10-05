@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using MCPHub.App.Messages;
+using MCPHub.Core.Permissions;
 using MCPHub.Core.Routing;
 using MCPHub.Core.Users;
 
@@ -90,6 +91,7 @@ public sealed partial class RouterViewModel : ViewModelBase
 {
     private readonly RouterStore _store;
     private readonly IUserDirectory _users;
+    private readonly IPermissionsConfigurationSource _permissions;
     private readonly RouterHost _host;
     private readonly IRouterActivityLog _activity;
     private readonly IRouterOutputTester _tester;
@@ -163,6 +165,18 @@ public sealed partial class RouterViewModel : ViewModelBase
             : "Every user already has access. Edit one below, or add another user.";
 
     public bool HasNoUsersHint => NoUsersHint is not null;
+
+    /// <summary>
+    /// Set while everyone is allowed elsewhere, because the Router is the exception: it has no
+    /// no-key mode at all. Somebody who has just been told that nothing needs a key would otherwise
+    /// meet a flat 401 here with nothing on the page explaining it.
+    /// </summary>
+    public string? PolicyWarning => _permissions.Snapshot.AllowUnauthenticated
+        ? "Everyone is allowed elsewhere, but the Router always needs a key. Only the users listed below "
+          + "can use this endpoint, each with the key it was given."
+        : null;
+
+    public bool HasPolicyWarning => PolicyWarning is not null;
     public string SavedDefaultSummary => DescribeDefault(_store.Snapshot);
 
     /// <summary>
@@ -209,12 +223,14 @@ public sealed partial class RouterViewModel : ViewModelBase
     public RouterViewModel(
         RouterStore store,
         IUserDirectory users,
+        IPermissionsConfigurationSource permissions,
         RouterHost host,
         IRouterActivityLog activity,
         IRouterOutputTester tester)
     {
         _store = store;
         _users = users;
+        _permissions = permissions;
         _host = host;
         _activity = activity;
         _tester = tester;
@@ -236,6 +252,11 @@ public sealed partial class RouterViewModel : ViewModelBase
         OnPropertyChanged(nameof(ListenerSummary));
         OnPropertyChanged(nameof(RejectionSummary));
         OnPropertyChanged(nameof(HasRejections));
+
+        // Decided on the Users page, so it is re-read on the page's own tick rather than when this
+        // page was last built.
+        OnPropertyChanged(nameof(PolicyWarning));
+        OnPropertyChanged(nameof(HasPolicyWarning));
         RefreshActivity();
     }
 
@@ -284,10 +305,11 @@ public sealed partial class RouterViewModel : ViewModelBase
     }
 
     partial void OnInputOutputChanged(RouterChoice? value) => OnPropertyChanged(nameof(InputRoutePreview));
-    /// <summary>Opens the Users page. This page can only name users, so the answer to "where do I make
-    /// one" should be a button rather than a sentence pointing at the nav bar.</summary>
+    /// <summary>Opens the Users page. This page can only name users and cannot issue a key, so the
+    /// answer to "where do I do that" should be a button rather than a sentence pointing at the nav
+    /// bar.</summary>
     [RelayCommand]
-    private void AddUser() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
+    private void OpenUsers() => WeakReferenceMessenger.Default.Send(ShowPageMessage.Users);
 
     [RelayCommand] private void NewOutput() { SelectedOutput = null; OnSelectedOutputChanged(null); IsOutputEditorOpen = true; }
     [RelayCommand] private void NewInput() { SelectedInput = null; OnSelectedInputChanged(null); IsInputEditorOpen = true; }

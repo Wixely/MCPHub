@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using MCPHub.App.Messages;
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Infrastructure;
+using MCPHub.Core.Permissions;
 using MCPHub.Core.Routing;
 using MCPHub.Core.Users;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -124,7 +125,7 @@ public sealed class RouterViewModelTests
 
         try
         {
-            f.Vm.AddUserCommand.Execute(null);
+            f.Vm.OpenUsersCommand.Execute(null);
         }
         finally
         {
@@ -213,6 +214,43 @@ public sealed class RouterViewModelTests
         Assert.Equal("Global default → Local model", f.Vm.InputRows.Single().RouteSummary);
         f.Vm.SaveInputCommand.Execute(null);
         Assert.Equal("Assigned output → Local model", f.Vm.InputRows.Single().RouteSummary);
+    }
+
+    /// <summary>
+    /// The Router is the exception to "everyone is allowed": it has no no-key mode at all. Somebody who
+    /// has just been told nothing needs a key would otherwise meet a flat 401 here with nothing on the
+    /// page explaining it.
+    /// </summary>
+    [Fact]
+    public async Task While_everyone_is_allowed_elsewhere_the_page_says_the_router_still_needs_a_key()
+    {
+        await using var f = new Fixture();
+
+        Assert.True(f.Vm.HasPolicyWarning);
+        Assert.Contains("always needs a key", f.Vm.PolicyWarning!, StringComparison.OrdinalIgnoreCase);
+
+        f.Permissions.SetAllowUnauthenticated(false);
+        f.Vm.RefreshHostState();
+
+        Assert.False(f.Vm.HasPolicyWarning);
+    }
+
+    /// <summary>And it is true: a key is required either way, so the routes below keep working whichever
+    /// the hub is set to.</summary>
+    [Fact]
+    public async Task Routes_work_the_same_whether_or_not_everyone_is_allowed_elsewhere()
+    {
+        await using var f = new Fixture();
+        var user = f.AddUser();
+        f.Vm.NewInputCommand.Execute(null);
+        f.Vm.SaveInputCommand.Execute(null);
+
+        Assert.True(f.Permissions.Snapshot.AllowUnauthenticated);
+        Assert.NotNull(f.Store.Resolve(user.Key));
+
+        f.Permissions.SetAllowUnauthenticated(false);
+
+        Assert.NotNull(f.Store.Resolve(user.Key));
     }
 
     /// <summary>A key rotated on the Users page keeps the route it had: the route names the user, not the
@@ -373,6 +411,7 @@ public sealed class RouterViewModelTests
         public string EnsureDirectory(string path) { Directory.CreateDirectory(path); return path; }
         public RouterStore Store { get; }
         public UserStore Users { get; }
+        public PermissionsStore Permissions { get; }
         public RouterHost Host { get; }
         public RouterActivityLog Activity { get; }
         public StubTester Tester { get; } = new();
@@ -382,9 +421,10 @@ public sealed class RouterViewModelTests
             Directory.CreateDirectory(SettingsDirectory);
             Users = new(this);
             Store = new(this, Users);
+            Permissions = new(this);
             Activity = new(this, writeInterval: TimeSpan.Zero);
             Host = new(Store, NullLogger<RouterHost>.Instance, activity: Activity);
-            Vm = new(Store, Users, Host, Activity, Tester);
+            Vm = new(Store, Users, Permissions, Host, Activity, Tester);
         }
 
         /// <summary>A user with a key, as the Users page would make one. The Router page can then give it

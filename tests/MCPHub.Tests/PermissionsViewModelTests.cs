@@ -114,7 +114,7 @@ public sealed class PermissionsViewModelTests : IDisposable
 
         try
         {
-            f.Vm.AddUserCommand.Execute(null);
+            f.Vm.OpenUsersCommand.Execute(null);
         }
         finally
         {
@@ -122,6 +122,42 @@ public sealed class PermissionsViewModelTests : IDisposable
         }
 
         Assert.Equal("Users", Assert.Single(asked));
+    }
+
+    /// <summary>
+    /// While everyone is allowed, nothing on this page does anything: every caller already has every
+    /// tool. The list underneath shows users looking carefully configured, which is exactly why it has
+    /// to be said at the top rather than left to be discovered.
+    /// </summary>
+    [Fact]
+    public void Everyone_being_allowed_is_warned_about_at_the_top()
+    {
+        var f = Build();
+
+        Assert.True(f.Vm.HasPolicyWarning);
+        Assert.Contains("every tool", f.Vm.PolicyWarning!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Users page", f.Vm.PolicyWarning!, StringComparison.Ordinal);
+
+        f.Store.SetAllowUnauthenticated(false);
+        f.Vm.RefreshPolicy();
+
+        Assert.False(f.Vm.HasPolicyWarning);
+    }
+
+    /// <summary>The choice is made on another page, so coming back has to re-read it rather than show
+    /// what was true when this page was last built.</summary>
+    [Fact]
+    public void The_warning_is_re_read_when_the_page_is_shown()
+    {
+        var f = Build();
+        f.Store.SetAllowUnauthenticated(false);
+        var reloaded = Build();
+        Assert.False(reloaded.Vm.HasPolicyWarning);
+
+        reloaded.Store.SetAllowUnauthenticated(true);
+        reloaded.Vm.RefreshPolicy();
+
+        Assert.True(reloaded.Vm.HasPolicyWarning);
     }
 
     // ---- editing grants ------------------------------------------------------------------------
