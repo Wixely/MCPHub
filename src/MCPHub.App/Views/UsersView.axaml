@@ -47,9 +47,12 @@
 
         <Border Background="{DynamicResource UsersCardBackground}" CornerRadius="8" Padding="16">
           <StackPanel Spacing="10">
-            <CheckBox IsChecked="{Binding KeysEnforced}" Content="Require a key"/>
-            <TextBlock Text="Off, anyone reaching this hub gets every tool. On, only these users do."
-                       FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
+            <TextBlock Text="Who gets in" FontWeight="SemiBold"/>
+            <RadioButton GroupName="UserAccess" IsChecked="{Binding IsOpenAccess}"
+                         Content="Enable all users — no key needed"/>
+            <RadioButton GroupName="UserAccess" IsChecked="{Binding KeysEnforced}"
+                         Content="Enable per-user permissions — each user needs its key"/>
+            <TextBlock Text="{Binding AccessSummary}" FontSize="12" Opacity="0.7" TextWrapping="Wrap"/>
             <CheckBox IsChecked="{Binding AdministerThroughProxy}" IsEnabled="{Binding CanEditAdministration}"
                       Content="Let users manage this hub"/>
             <TextBlock Text="Exposes the users__ and permissions__ tools, so another application can add users and grant tools. Off by default — a user with them can grant itself anything."

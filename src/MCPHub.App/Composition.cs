@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http.Headers;
 using MCPHub.App.Proxy;
+using MCPHub.App.Infrastructure;
 using MCPHub.App.ViewModels;
 using MCPHub.Hosting;
 using MCPHub.Core.Agent;
@@ -209,6 +210,10 @@ public static class Composition
         services.AddSingleton<ISlopworksDaggerBridge, SlopworksDaggerBridge>();
 
         // View-models
+        // Asking before something takes effect. A window, so a choice cannot be left half-made by
+        // navigating away from the page that asked.
+        services.AddSingleton<IConfirmation, DialogConfirmation>();
+
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
         services.AddSingleton<AgentViewModel>();

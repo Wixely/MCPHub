@@ -156,7 +156,9 @@ The environment variables win over the checkboxes when set (`true`/`false`, `1`/
 
 Who may use this hub. A user is made once here and holds one key; **Router** then decides which models it may reach and **Permissions** which tools. Those two pages only ever name users made here, which is why they sit together in the sidebar.
 
-By default no key is required: MCPHub binds loopback and anything reaching it gets every tool, which is how it has always worked on your own machine. Turn on **Require a key** and only these users get in, each seeing only what it has been given.
+Who gets in is one choice, made with two buttons at the top of the page. **Enable all users** is the default and how MCPHub has always worked on your own machine: it binds loopback and anything reaching it gets every tool, no key needed. **Enable per-user permissions** means every program must authenticate with a user's key, and each gets only what it has been given.
+
+Switching asks first, because there is no halfway state: with per-user permissions on, no-key access is not available, so anything not set up as a user — with that user's key in its own MCP configuration — stops working immediately. Switching back is confirmed too, since it hands every tool to anything that can reach the hub.
 
 Adding a user issues its key, **shown once** — only the hash is stored, so a lost key is rotated rather than looked up. The list shows the first eight characters of the hash, enough to tell two keys apart and no use for getting in.
 
@@ -166,7 +168,7 @@ A `router.json` written before this page existed is migrated on first load, so e
 
 | Switch | Does | Headless / Docker flag |
 | --- | --- | --- |
-| **Require a key** | Off, anything reaching this hub gets every tool. On, only these users do, each seeing only what it has been given. | Set in the permissions document |
+| **Enable all users** / **Enable per-user permissions** | Everything gets every tool with no key, or every program authenticates as a user and gets only what it has been given. | Set in the permissions document |
 | **Let users manage this hub** | Exposes `users__*` and `permissions__*`, so another application can add users and grant tools. **Off by default** — a user holding them can grant itself anything. | `MCPHUB_ADMINISTRATION_ENABLED=true` |
 
 A warning appears when users exist while a key is not required: nothing they have been given applies, because everything is being let in regardless. Reasonable while setting a hub up, never somewhere to stay.

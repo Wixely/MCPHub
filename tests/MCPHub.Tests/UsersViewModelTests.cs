@@ -1,3 +1,4 @@
+using MCPHub.App.Infrastructure;
 using MCPHub.App.ViewModels;
 using MCPHub.Core.Permissions;
 using MCPHub.Core.Routing;
@@ -24,6 +25,23 @@ public sealed class UsersViewModelTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
+    /// <summary>
+    /// Answers the page's confirmations and keeps what it was asked, so a test can check that the
+    /// warning a person reads before everything changes actually says what it should.
+    /// </summary>
+    private sealed class StubConfirmation(bool answer) : IConfirmation
+    {
+        public List<ConfirmRequest> Asked { get; } = [];
+
+        public ConfirmRequest Last => Assert.Single(Asked);
+
+        public Task<bool> AskAsync(ConfirmRequest request)
+        {
+            Asked.Add(request);
+            return Task.FromResult(answer);
+        }
+    }
+
     private sealed record Fixture(
         UsersViewModel Vm,
         UserStore Users,
@@ -31,7 +49,10 @@ public sealed class UsersViewModelTests : IDisposable
         RouterStore Router,
         SettingsStore Settings);
 
-    private Fixture Build(params (string Variable, string Value)[] environment)
+    private Fixture Build(params (string Variable, string Value)[] environment) =>
+        Build(new StubConfirmation(answer: true), environment);
+
+    private Fixture Build(StubConfirmation confirm, params (string Variable, string Value)[] environment)
     {
         var map = environment.ToDictionary(e => e.Variable, e => e.Value, StringComparer.Ordinal);
         var paths = new FakeAppPaths(_dir.Path);
@@ -42,7 +63,7 @@ public sealed class UsersViewModelTests : IDisposable
 
         var router = new RouterStore(paths, users);
         return new Fixture(
-            new UsersViewModel(users, permissions, [permissions, router], settings, administration),
+            new UsersViewModel(users, permissions, [permissions, router], settings, administration, confirm),
             users,
             permissions,
             router,
@@ -198,19 +219,118 @@ public sealed class UsersViewModelTests : IDisposable
     // ---- not misleading the operator -----------------------------------------------------------
 
     /// <summary>
-    /// The switch must read back what it wrote. A checkbox that reverts on the next page load is the
-    /// bug an operator cannot diagnose, because nothing is wrong with the thing they were looking at.
+    /// The choice must read back what it wrote. A control that reverts on the next page load is the bug
+    /// an operator cannot diagnose, because nothing is wrong with the thing they were looking at.
     /// </summary>
     [Fact]
-    public void Requiring_a_key_persists_and_reads_back()
+    public void Turning_on_per_user_permissions_persists_and_reads_back()
     {
         var f = Build();
         Assert.False(f.Vm.KeysEnforced);
+        Assert.True(f.Vm.IsOpenAccess);
 
         f.Vm.KeysEnforced = true;
 
+        Assert.False(f.Vm.IsOpenAccess);
         Assert.False(f.Permissions.Snapshot.AllowUnauthenticated);
         Assert.True(Build().Vm.KeysEnforced);
+    }
+
+    /// <summary>The two radio buttons are one choice, so picking either moves the other.</summary>
+    [Fact]
+    public void Choosing_either_option_unpicks_the_other()
+    {
+        var f = Build();
+
+        f.Vm.KeysEnforced = true;
+        Assert.False(f.Vm.IsOpenAccess);
+
+        f.Vm.IsOpenAccess = true;
+        Assert.False(f.Vm.KeysEnforced);
+        Assert.True(f.Permissions.Snapshot.AllowUnauthenticated);
+    }
+
+    /// <summary>
+    /// Nothing changes until it has been agreed to. There is no halfway state — turning permissions on
+    /// refuses every program that has no key — so it is asked for rather than applied and explained
+    /// afterwards.
+    /// </summary>
+    [Fact]
+    public void Turning_on_per_user_permissions_is_confirmed_first()
+    {
+        var confirm = new StubConfirmation(answer: true);
+        var f = Build(confirm);
+        f.Users.Create("Banter");
+        var reloaded = Build(confirm);
+
+        reloaded.Vm.KeysEnforced = true;
+
+        Assert.False(reloaded.Permissions.Snapshot.AllowUnauthenticated);
+        var asked = Assert.Single(confirm.Asked);
+        Assert.Contains("key", asked.Message, StringComparison.OrdinalIgnoreCase);
+        // The part that matters: not that it is safer, but that there is no partial mode.
+        Assert.Contains("no partial mode", asked.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("stops working immediately", asked.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>With nobody set up, turning it on locks everything out — and says so rather than
+    /// leaving somebody to find out.</summary>
+    [Fact]
+    public void With_no_users_the_confirmation_says_nothing_will_reach_the_hub()
+    {
+        var confirm = new StubConfirmation(answer: true);
+        var f = Build(confirm);
+
+        f.Vm.KeysEnforced = true;
+
+        Assert.Contains("no users yet", confirm.Last.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Declining_the_confirmation_leaves_the_choice_where_it_was()
+    {
+        var confirm = new StubConfirmation(answer: false);
+        var f = Build(confirm);
+
+        f.Vm.KeysEnforced = true;
+
+        Assert.False(f.Vm.KeysEnforced);
+        Assert.True(f.Vm.IsOpenAccess);
+        Assert.True(f.Permissions.Snapshot.AllowUnauthenticated);
+        Assert.True(Build().Vm.IsOpenAccess);
+        Assert.Single(confirm.Asked);
+    }
+
+    /// <summary>
+    /// And the way back is confirmed too: letting everyone in again hands every tool to anything that
+    /// can reach the hub, which is at least as worth a sentence as turning it on.
+    /// </summary>
+    [Fact]
+    public void Going_back_to_allowing_everyone_is_confirmed_too()
+    {
+        var confirm = new StubConfirmation(answer: true);
+        var f = Build(confirm);
+        f.Vm.KeysEnforced = true;
+        confirm.Asked.Clear();
+
+        f.Vm.IsOpenAccess = true;
+
+        Assert.True(f.Permissions.Snapshot.AllowUnauthenticated);
+        Assert.Contains("every tool", confirm.Last.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Loading the page is not a decision, so opening it asks nothing.</summary>
+    [Fact]
+    public void Opening_the_page_confirms_nothing()
+    {
+        var confirm = new StubConfirmation(answer: true);
+        var f = Build(confirm);
+        f.Vm.KeysEnforced = true;
+        confirm.Asked.Clear();
+
+        _ = Build(confirm).Vm;
+
+        Assert.Empty(confirm.Asked);
     }
 
     /// <summary>

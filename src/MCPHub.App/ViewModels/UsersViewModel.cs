@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MCPHub.App.Infrastructure;
 using MCPHub.Core.Permissions;
 using MCPHub.Core.Settings;
 using MCPHub.Core.Users;
@@ -44,6 +45,7 @@ public sealed partial class UsersViewModel : ViewModelBase
     private readonly IReadOnlyList<IUserDependent> _dependents;
     private readonly ISettingsStore _settings;
     private readonly AdministrationPolicy _administration;
+    private readonly IConfirmation _confirm;
 
     /// <summary>True while Refresh loads the switches, so their change handlers do not write back what
     /// they have just read. The same guard SettingsViewModel uses.</summary>
@@ -64,13 +66,15 @@ public sealed partial class UsersViewModel : ViewModelBase
         PermissionsStore permissions,
         IEnumerable<IUserDependent> dependents,
         ISettingsStore settings,
-        AdministrationPolicy administration)
+        AdministrationPolicy administration,
+        IConfirmation confirm)
     {
         _users = users;
         _permissions = permissions;
         _dependents = [.. dependents];
         _settings = settings;
         _administration = administration;
+        _confirm = confirm;
         Refresh();
     }
 
@@ -100,11 +104,17 @@ public sealed partial class UsersViewModel : ViewModelBase
     /// never somewhere to stay — and invisible from the list, which shows users looking configured.
     /// </summary>
     public string? Warning => !KeysEnforced && Users.Count > 0
-        ? "A key is not required, so anything reaching this hub gets every tool whether it is a user or not. "
-          + "Turn on \"Require a key\" to make these users count."
+        ? "Everyone is allowed, so anything reaching this hub gets every tool whether it is a user or not. "
+          + "Choose per-user permissions to make these users count."
         : null;
 
     public bool HasWarning => Warning is not null;
+
+    /// <summary>What the chosen mode means, under the two buttons, so the consequence is on the page
+    /// rather than only in the dialog that appears when it changes.</summary>
+    public string AccessSummary => KeysEnforced
+        ? "Every program needs a user's key. Each gets only what it is given on Router and Permissions."
+        : "No key is needed. Anything that can reach this hub gets every tool.";
 
     /// <summary>Set when an environment variable pins the administration switch, so the checkbox is
     /// shown locked rather than appearing not to save.</summary>
@@ -134,19 +144,90 @@ public sealed partial class UsersViewModel : ViewModelBase
     /// per request, so there is nothing to apply later and a checkbox needing a save would be one that
     /// lies in between.
     /// </summary>
-    partial void OnKeysEnforcedChanged(bool value) => Run(() =>
+    /// <summary>
+    /// The other half of the choice, so the two radio buttons can each bind to a property of their own
+    /// rather than to one negated binding that only works in one direction.
+    /// </summary>
+    public bool IsOpenAccess
     {
+        get => !KeysEnforced;
+        set
+        {
+            if (value)
+            {
+                KeysEnforced = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Changing how the hub decides who gets in, after asking.
+    ///
+    /// <para>Asked rather than applied because there is no halfway state: turning permissions on
+    /// refuses every program that has not been given a key, and turning them off hands every tool to
+    /// anything that can reach the hub. Both are worth a sentence before they happen, and the radio
+    /// goes back where it was if the answer is no.</para>
+    /// </summary>
+    partial void OnKeysEnforcedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsOpenAccess));
+        OnPropertyChanged(nameof(AccessSummary));
         if (_loading || _permissions.Snapshot.AllowUnauthenticated == !value)
         {
             return;
         }
 
-        _permissions.SetAllowUnauthenticated(!value);
-        RefreshWarning();
-        StatusMessage = value
-            ? "A key is now required. Only these users get in."
-            : "A key is no longer required. Anything reaching this hub gets every tool.";
-    });
+        _ = ApplyAccessModeAsync(value);
+    }
+
+    private async Task ApplyAccessModeAsync(bool enforced)
+    {
+        if (!await _confirm.AskAsync(enforced ? EnforceKeysQuestion() : AllowEveryoneQuestion()))
+        {
+            _loading = true;
+            KeysEnforced = !enforced;
+            _loading = false;
+            StatusMessage = "Left as it was.";
+            return;
+        }
+
+        Run(() =>
+        {
+            _permissions.SetAllowUnauthenticated(!enforced);
+            RefreshWarning();
+            StatusMessage = enforced
+                ? "Per-user permissions are on. Every program needs a key now."
+                : "Everyone is allowed. Any program reaching this hub gets every tool.";
+        });
+    }
+
+    /// <summary>
+    /// The warning that matters: there is no partial mode, so anything not set up as a user stops
+    /// working the moment this is on. Says outright when that means everything.
+    /// </summary>
+    private ConfirmRequest EnforceKeysQuestion()
+    {
+        var consequence = Users.Count == 0
+            ? "There are no users yet, so nothing will be able to reach this hub until you add one and copy its key into that program's MCP configuration."
+            : $"Anything not set up as one of these {Users.Count} user(s), with that user's key in its MCP configuration, stops working immediately.";
+
+        return new ConfirmRequest(
+            "Turn on per-user permissions?",
+            "Every program using this hub must then authenticate with a user's key — the proxy and the "
+            + "Model Router alike. There is no partial mode: no-key access is not available while this is on."
+            + Environment.NewLine + Environment.NewLine
+            + consequence,
+            "Turn it on",
+            "Leave it off");
+    }
+
+    private static ConfirmRequest AllowEveryoneQuestion() => new(
+        "Allow everyone again?",
+        "Any program that can reach this hub will get every tool, with no key at all."
+        + Environment.NewLine + Environment.NewLine
+        + "Your users and everything they have been given are kept, but none of it is checked while this is on.",
+        "Allow everyone",
+        "Keep permissions on");
 
     partial void OnAdministerThroughProxyChanged(bool value) => Run(() =>
     {
