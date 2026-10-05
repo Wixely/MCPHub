@@ -1,0 +1,27 @@
+services:
+  mcphub:
+    build:
+      context: ../..
+      dockerfile: src/MCPHub.Server/Dockerfile
+    ports:
+      # Loopback on the host: the proxy serves every tool this hub has, and whether a caller needs a
+      # key is a choice made inside it. Publish wider only once per-user permissions are on.
+      - "127.0.0.1:5800:5800"
+    environment:
+      MCPHUB_PROXY_BIND: 0.0.0.0
+      MCPHUB_PROXY_PORT: "5800"
+      # The users__ and permissions__ tools, so another application — Banter, say — can add users
+      # and grant tools over the same MCP endpoint it uses for everything else. Off without this.
+      MCPHUB_ADMINISTRATION_ENABLED: "true"
+    volumes:
+      - mcphub-config:/config
+      - mcphub-data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  mcphub-config:
+  mcphub-data:

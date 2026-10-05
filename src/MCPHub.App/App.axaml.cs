@@ -6,7 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using MCPHub.App.Proxy;
+using MCPHub.Hub.Proxy;
 using MCPHub.Core.Infrastructure;
 using MCPHub.App.ViewModels;
 using MCPHub.App.Views;

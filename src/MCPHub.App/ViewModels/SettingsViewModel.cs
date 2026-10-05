@@ -9,7 +9,7 @@ using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MCPHub.App.Proxy;
+using MCPHub.Hub.Proxy;
 using MCPHub.Core.Backup;
 using MCPHub.Core.Infrastructure;
 using MCPHub.Core.Management;

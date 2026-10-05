@@ -4,6 +4,8 @@
     <Project Path="src/MCPHub.Processes/MCPHub.Processes.csproj" />
     <Project Path="src/MCPHub.Proxy/MCPHub.Proxy.csproj" />
     <Project Path="src/MCPHub.Hosting/MCPHub.Hosting.csproj" />
+    <Project Path="src/MCPHub.Hub/MCPHub.Hub.csproj" />
+    <Project Path="src/MCPHub.Server/MCPHub.Server.csproj" />
     <Project Path="src/MCPHub.App/MCPHub.App.csproj" />
   </Folder>
   <Folder Name="/tests/">

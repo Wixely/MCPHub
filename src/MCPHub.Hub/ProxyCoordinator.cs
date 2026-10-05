@@ -8,7 +8,7 @@ using MCPHub.Core.Settings;
 using MCPHub.Proxy;
 using Microsoft.Extensions.Logging;
 
-namespace MCPHub.App.Proxy;
+namespace MCPHub.Hub.Proxy;
 
 /// <summary>
 /// Bridges service process lifecycle to the proxy: connects an upstream when a managed service becomes

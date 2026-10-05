@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MCPHub.App.Proxy;
+using MCPHub.Hub.Proxy;
 using MCPHub.Hosting;
 using MCPHub.Core.Settings;
 using MCPHub.Proxy;

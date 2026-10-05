@@ -289,6 +289,63 @@ The proxy's MCP `instructions` describe the granted capabilities to a connecting
 
 MCPHub updates itself the same way from the **Updates** page.
 
+## Running it headless
+
+MCPHub also runs without a window: the same hub, hosted by a container's lifetime instead of a
+desktop's. It serves the same `/mcp` endpoint with the same tools, the same users and the same
+permissions — one hub with two heads, rather than a second, thinner one that would drift.
+
+```powershell
+docker compose -f src/MCPHub.Server/compose.yaml up --build
+```
+
+Or built and run by hand:
+
+```powershell
+docker build -f src/MCPHub.Server/Dockerfile -t mcphub:local .
+docker run --rm -p 127.0.0.1:5800:5800 `
+  -v mcphub-config:/config -v mcphub-data:/data `
+  -e MCPHUB_ADMINISTRATION_ENABLED=true mcphub:local
+```
+
+Point an MCP client at `http://127.0.0.1:5800/mcp`, exactly as for the desktop.
+
+| Environment variable | Meaning |
+| --- | --- |
+| `MCPHUB_CONFIG_DIR` | Where settings, users, permissions and routes live. `/config` in the image. |
+| `MCPHUB_DATA_DIR` | Where downloaded servers and their working files live. `/data` in the image. |
+| `MCPHUB_PROXY_BIND` | What the listener binds. `0.0.0.0` here — loopback would be reachable only from inside the container. |
+| `MCPHUB_PROXY_PORT` | The port inside the container. 5800 by default. A value that is not a port stops the process rather than binding a different one. |
+| `MCPHUB_ADMINISTRATION_ENABLED` | Exposes `users__*` and `permissions__*`, so another application can add users and grant tools over the same endpoint. **Off unless set** — the same variable, with the same meaning, as the desktop's switch. |
+
+Both directories are written to. Identity, permissions and routes are edited through the management
+tools, which is the reason to run this headless at all, so mount them — a hub that forgets every key
+it issued when the container is replaced is worse than one that will not start. A deployment that
+wants its policy fixed should mount the read-only `users.json` and `permissions.json` the deployment
+sources read instead.
+
+The listener is the deployment's: a port chosen on somebody's desktop and carried in on a mounted
+config would leave the published port pointing at nothing, so the environment wins and the proxy
+starts whatever `StartProxyOnLaunch` says. A container is running because somebody started it.
+
+**Setting one up from another application.** With administration on, everything below is MCP tool
+calls against `/mcp` — no second API, no second authentication story:
+
+1. `users__create` — issues a key, returned once.
+2. `permissions__set_grants` — says what that user may use (`kodi__*`, `recipes__list`, `*`).
+3. `permissions__set_allow_unauthenticated` with `allowed: false` — from then on a caller with no
+   key is refused and each key sees only what it was granted. Anything not set up as a user stops
+   working at that moment, so do it last.
+4. `permissions__explain` when something is missing: it lists *every* reason a tool is withheld.
+
+The service-management tools (`mcphub__install`, `start`, `stop`, …) stay behind their own switch and
+are off here as they are on the desktop: installing binaries into a container means a writable `/data`
+and an image that can run what it downloads, which is a deployment's decision rather than a default.
+`MCPHUB_AGENT_MANAGEMENT_ENABLED=true` turns them on.
+
+The Model Router is not in this image. The [headless Router sample](samples/HeadlessRouter/README.md)
+hosts that on its own, with the same users document.
+
 ## Where things live
 
 | | |
