@@ -67,11 +67,42 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.zip
-          generate_release_notes: true
+      # The body is the tag's own annotation. Release notes here are written by hand before the
+      # tag is pushed; generated notes list commit subjects instead, which say how the work
+      # arrived rather than what shipped — and they silently REPLACE the annotation, which is how
+      # v0.14.0 shipped with a one-line changelog and nothing else.
+      #
+      # Read over the API, never from a checkout: actions/checkout resolves the ref to a commit
+      # and force-updates refs/tags/<tag> to point at it, so the annotation is unreachable
+      # locally whatever fetch-depth says. This job checks out nothing for that reason.
+      - name: Create the release from the tag's own annotation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; leaving its notes alone."
+            exit 0
+          fi
+
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+          obj_type="$(jq -r '.object.type' <<<"${ref_json}")"
+          obj_sha="$(jq -r '.object.sha' <<<"${ref_json}")"
+
+          if [ "${obj_type}" = "tag" ]; then
+            notes="${RUNNER_TEMP}/release-notes.md"
+            gh api "repos/${GITHUB_REPOSITORY}/git/tags/${obj_sha}" --jq '.message' > "${notes}"
+            echo "Annotated tag: release body from its message ($(wc -c < "${notes}") bytes)."
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --notes-file "${notes}"
+          else
+            echo "${GITHUB_REF_NAME} is a lightweight tag (object type '${obj_type}'); generating notes."
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
+          fi
+
+      - name: Upload the release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/*.zip --repo "${GITHUB_REPOSITORY}" --clobber
 
   # Publishes the three embeddable libraries (Proxy, Hosting, Processes) to the Wixely
   # GitHub Packages NuGet feed. Consumers restore with a read:packages PAT against
