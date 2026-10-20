@@ -21,6 +21,7 @@ namespace MCPHub.Tests;
 /// therefore inert, and an explanation that lists every reason a tool is withheld rather than the
 /// first. Users and keys are <see cref="UsersViewModelTests"/>'s.</para>
 /// </summary>
+[Collection(SharedMessengerCollection.Name)]
 public sealed class PermissionsViewModelTests : IDisposable
 {
     private readonly TempDir _dir = new();

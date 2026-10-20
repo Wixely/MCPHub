@@ -10,6 +10,7 @@ using Xunit;
 
 namespace MCPHub.Tests;
 
+[Collection(SharedMessengerCollection.Name)]
 public sealed class RouterViewModelTests
 {
     [Fact]
