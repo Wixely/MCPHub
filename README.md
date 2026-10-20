@@ -52,6 +52,8 @@ Click **Copy snippet** and paste it into your client:
 
 Add or remove servers later and your client config never changes — the proxy picks them up as they start and stop.
 
+The tool list of each server is read when it connects. If a server changes its tools while it is running — most likely one you added yourself, which MCPHub does not restart — press **Refresh** on its row under *Connected servers*, or **Refresh all**, and the proxy reconnects and re-lists it. Refreshing a single server then shows what changed: tools added, removed or renamed, and for the rest any parameter added or removed, a type or required-ness changed, different allowed values or defaults, and changed result schemas or hints.
+
 ### Adding your own servers
 
 The Proxy page also aggregates MCP servers MCPHub doesn't manage — any HTTP endpoint, or a local command spoken to over stdio. Give it a name, the URL or command, and it joins the same aggregated endpoint under its own tool namespace.
@@ -392,6 +394,8 @@ The lock is an exclusive lock the operating system holds on `mcphub.lock` for as
 **Nothing is listed as Connected.** Servers connect a moment after they start. If a server sits at *Starting* it's failing its health check — check its logs.
 
 **A server I added keeps faulting with 401 or "unauthorized".** Its row on the Proxy page names how it authenticates. *"No token"* means nothing is being sent — use **Set token**. *"BearerToken configured — token missing"* means the mechanism is set but the secret store has no value for it, which also shows as a warning in the logs; set the token again. If the server wants an API-key header rather than a bearer token, name that header in the box to the left of the token.
+
+**A server I added was updated and its new tools aren't showing.** Tools are listed once, when the server connects. Press **Refresh** on its row on the Proxy page (or **Refresh all**) to reconnect and re-list it; the same button retries a *Faulted* server at once instead of waiting for its backoff.
 
 ## Licence
 

@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using MCPHub.App.Infrastructure;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MCPHub.Hub.Proxy;
@@ -21,6 +22,7 @@ public sealed partial class ProxyViewModel : ViewModelBase
     private readonly ProxyHandlers _handlers;
     private readonly ISettingsStore _settings;
     private readonly ISecretStore _secrets;
+    private readonly IToolChangesDialog _toolChanges;
 
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private int _toolCount;
@@ -34,8 +36,9 @@ public sealed partial class ProxyViewModel : ViewModelBase
     public ObservableCollection<UpstreamRowViewModel> Upstreams { get; } = [];
     public ObservableCollection<UserServerRowViewModel> UserServers { get; } = [];
 
-    public ProxyViewModel(ProxyCoordinator coordinator, ProxyHandlers handlers, ISettingsStore settings, ISecretStore secrets)
+    public ProxyViewModel(ProxyCoordinator coordinator, ProxyHandlers handlers, ISettingsStore settings, ISecretStore secrets, IToolChangesDialog toolChanges)
     {
+        _toolChanges = toolChanges;
         _coordinator = coordinator;
         _host = coordinator.Host;
         _registry = coordinator.Registry;
@@ -71,7 +74,7 @@ public sealed partial class ProxyViewModel : ViewModelBase
 
         Upstreams.Clear();
         foreach (var upstream in _registry.Upstreams.OrderBy(u => u.DisplayName))
-            Upstreams.Add(new UpstreamRowViewModel(upstream));
+            Upstreams.Add(new UpstreamRowViewModel(upstream, this));
 
         // Rows are rebuilt on every catalog change — including the reconnect sweep — so an open token
         // editor has to survive the rebuild, or a token being pasted disappears under the user.
@@ -114,6 +117,65 @@ public sealed partial class ProxyViewModel : ViewModelBase
 
         Refresh();
     }
+
+    /// <summary>
+    /// Drops and re-establishes every upstream connection, re-listing each server's tools. The catalog
+    /// changes behind this raise <see cref="IUpstreamRegistry.CatalogChanged"/>, which redraws the rows.
+    /// </summary>
+    [RelayCommand]
+    private async Task RefreshAllUpstreamsAsync()
+    {
+        StatusMessage = "Reconnecting every server…";
+        await _registry.ReconnectAllAsync();
+        Refresh();
+
+        var faulted = Upstreams.Count(u => u.State == UpstreamState.Faulted);
+        StatusMessage = faulted == 0
+            ? $"Reconnected {Upstreams.Count} server(s); {ToolCount} tools aggregated."
+            : $"Reconnected {Upstreams.Count - faulted} server(s); {faulted} faulted — see the row for the error.";
+    }
+
+    /// <summary>
+    /// Reconnects one upstream, which is how a server MCPHub does not control gets its updated tool list
+    /// picked up without restarting the hub or waiting for it to fault — then shows what changed about its
+    /// tools. Only here: Refresh all would raise one dialog per server, which nobody wants to click through.
+    /// </summary>
+    public async Task RefreshUpstreamAsync(UpstreamRowViewModel row)
+    {
+        StatusMessage = $"Reconnecting '{row.DisplayName}'…";
+
+        // The list is replaced on a successful re-list, never mutated, so this reference keeps the old one.
+        var previous = FindUpstream(row.Key);
+        var toolsBefore = previous?.Tools ?? [];
+        var hadListing = previous is { State: UpstreamState.Connected } || toolsBefore.Count > 0;
+
+        var known = await _registry.ReconnectAsync(row.Key);
+        Refresh();
+
+        var upstream = known ? FindUpstream(row.Key) : null;
+        StatusMessage = upstream switch
+        {
+            null => $"'{row.DisplayName}' is no longer registered.",
+            { State: UpstreamState.Connected } => $"Reconnected '{upstream.DisplayName}': {upstream.ToolCount} tool(s).",
+            _ => $"'{upstream.DisplayName}' could not reconnect: {upstream.LastError}",
+        };
+
+        if (upstream is null)
+            return;
+
+        // Connected but still holding the very same list means the re-list itself failed: comparing would
+        // report "no changes" about a list that was never fetched again.
+        var relisted = upstream.State == UpstreamState.Connected
+                       && !(ReferenceEquals(upstream.Tools, toolsBefore) && !string.IsNullOrEmpty(upstream.LastError));
+
+        var summary = relisted
+            ? ToolChangesViewModel.ForChanges(upstream.DisplayName, ToolCatalogDiff.Compare(toolsBefore, upstream.Tools), hadListing)
+            : ToolChangesViewModel.ForFailure(upstream.DisplayName, upstream.LastError);
+        await _toolChanges.ShowAsync(summary);
+    }
+
+    private UpstreamServer? FindUpstream(string key)
+        => _registry.Upstreams.FirstOrDefault(u => string.Equals(u.Key, key, StringComparison.OrdinalIgnoreCase));
 
     [RelayCommand]
     private async Task AddUserServerAsync()
@@ -260,11 +322,15 @@ public sealed partial class ProxyViewModel : ViewModelBase
     }
 }
 
-/// <summary>One upstream row in the proxy status list.</summary>
-public sealed class UpstreamRowViewModel
+/// <summary>One upstream row in the proxy status list, with its own refresh command.</summary>
+public sealed partial class UpstreamRowViewModel
 {
-    public UpstreamRowViewModel(UpstreamServer upstream)
+    private readonly ProxyViewModel _parent;
+
+    public UpstreamRowViewModel(UpstreamServer upstream, ProxyViewModel parent)
     {
+        _parent = parent;
+        Key = upstream.Key;
         DisplayName = upstream.DisplayName;
         State = upstream.State;
         StateText = upstream.State.ToString();
@@ -273,6 +339,7 @@ public sealed class UpstreamRowViewModel
         LastError = upstream.LastError;
     }
 
+    public string Key { get; }
     public string DisplayName { get; }
     public UpstreamState State { get; }
     public string StateText { get; }
@@ -280,6 +347,12 @@ public sealed class UpstreamRowViewModel
     public string Endpoint { get; }
     public string? LastError { get; }
     public bool HasError => !string.IsNullOrEmpty(LastError);
+
+    /// <summary>A refresh already in flight shows as Connecting; a second click would only race it.</summary>
+    public bool CanRefresh => State != UpstreamState.Connecting;
+
+    [RelayCommand]
+    private Task Refresh() => _parent.RefreshUpstreamAsync(this);
 }
 
 /// <summary>One user-added server row, with its own remove/toggle and token commands.</summary>

@@ -52,6 +52,9 @@
             <Run Text="Aggregated tools: "/>
             <Run Text="{Binding ToolCount}" FontWeight="SemiBold"/>
           </TextBlock>
+          <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,6,0,0"
+                     Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                     IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
         </Grid>
       </Border>
 
@@ -69,9 +72,17 @@
 
       <!-- Upstreams -->
       <StackPanel Spacing="6">
-        <TextBlock Text="Connected servers" FontWeight="SemiBold"/>
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="Connected servers" FontWeight="SemiBold"/>
+            <TextBlock Text="Tools are read when a server connects. Refresh one after it has been updated — the hub does not notice changes on servers it does not run. Refreshing a single server shows what changed about its tools."
+                       Opacity="0.6" FontSize="12" TextWrapping="Wrap"/>
+          </StackPanel>
+          <Button Grid.Column="1" Content="Refresh all" Command="{Binding RefreshAllUpstreamsCommand}"
+                  IsVisible="{Binding HasUpstreams}" VerticalAlignment="Top" Margin="12,0,0,0"/>
+        </Grid>
         <Border Background="#14000000" CornerRadius="6,6,0,0" Padding="14,8">
-          <Grid ColumnDefinitions="*,120,80">
+          <Grid ColumnDefinitions="*,120,80,80">
             <TextBlock Grid.Column="0" Text="Server" FontWeight="SemiBold"/>
             <TextBlock Grid.Column="1" Text="State" FontWeight="SemiBold"/>
             <TextBlock Grid.Column="2" Text="Tools" FontWeight="SemiBold"/>
@@ -81,7 +92,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:UpstreamRowViewModel">
               <Border BorderBrush="#18000000" BorderThickness="0,0,0,1" Padding="14,9">
-                <Grid ColumnDefinitions="*,120,80">
+                <Grid ColumnDefinitions="*,120,80,80">
                   <StackPanel Grid.Column="0" Spacing="2">
                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding Endpoint}" Opacity="0.55" FontSize="11"/>
@@ -94,6 +105,9 @@
                     <TextBlock Text="{Binding StateText}" FontSize="12"/>
                   </StackPanel>
                   <TextBlock Grid.Column="2" Text="{Binding ToolCount}" VerticalAlignment="Center"/>
+                  <Button Grid.Column="3" Content="Refresh" VerticalAlignment="Center" HorizontalAlignment="Right"
+                          Command="{Binding RefreshCommand}" IsEnabled="{Binding CanRefresh}"
+                          ToolTip.Tip="Reconnect to this server and re-list its tools"/>
                 </Grid>
               </Border>
             </DataTemplate>

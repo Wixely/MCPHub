@@ -1,4 +1,5 @@
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 namespace MCPHub.Proxy;
 
@@ -38,6 +39,13 @@ public sealed class UpstreamServer
 
     /// <summary>Number of tools this upstream contributed on its last successful list.</summary>
     public int ToolCount { get; set; }
+
+    /// <summary>
+    /// The tools as this upstream listed them on its last successful list — its own names, before the proxy
+    /// namespaced them. Replaced, never mutated, so a reference taken before a reconnect still holds the
+    /// earlier list to compare against with <see cref="ToolCatalogDiff"/>.
+    /// </summary>
+    public IReadOnlyList<Tool> Tools { get; internal set; } = [];
 
     /// <summary>The live client once connected (owned by the registry).</summary>
     internal McpClient? Client { get; set; }

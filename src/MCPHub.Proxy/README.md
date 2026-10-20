@@ -21,7 +21,20 @@ var handlers = new ProxyHandlers(registry);   // allow-all, no audit — single-
 
 `registry.Catalog` is an immutable snapshot swapped atomically; subscribe to
 `registry.CatalogChanged` to observe upstreams connecting/disconnecting. Faulted upstreams retry
-with capped exponential backoff. Multiple registries (and hosts) per process are supported — there
+with capped exponential backoff. Tools are listed when an upstream connects, so a server that
+changes its tools while up is re-read with `registry.ReconnectAsync(key)` (or `ReconnectAllAsync()`),
+which drops the session, connects again with the same transport and credentials, and rebuilds the
+catalog; on a faulted upstream it retries immediately rather than waiting out the backoff.
+`UpstreamServer.Tools` holds the tools as the upstream last listed them, before namespacing, and is
+replaced rather than mutated, so a reference taken before a reconnect can be compared with the new one:
+
+```csharp
+var before = registry.Upstreams.Single(u => u.Key == "files").Tools;
+await registry.ReconnectAsync("files");
+var after = registry.Upstreams.Single(u => u.Key == "files").Tools;
+foreach (var change in ToolCatalogDiff.Compare(before, after).Changes)
+    Console.WriteLine($"{change.Kind} {change.Name}: {string.Join(" ", change.Details)}");
+``` Multiple registries (and hosts) per process are supported — there
 is no static mutable state.
 
 ## Upstreams that require a credential

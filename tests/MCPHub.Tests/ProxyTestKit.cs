@@ -39,6 +39,10 @@ internal static class ProxyTestKit
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<bool> ReconnectAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+        public Task ReconnectAllAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task DisconnectAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task DisconnectAllAsync() => Task.CompletedTask;

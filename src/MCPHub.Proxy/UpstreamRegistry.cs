@@ -47,6 +47,17 @@ public interface IUpstreamRegistry
         IReadOnlyDictionary<string, string?>? environment = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Drops the live connection to an upstream and connects again with the same transport, re-listing its
+    /// tools. This is how a server that was updated out from under the proxy gets its new tool set picked up,
+    /// and it retries a faulted upstream right away instead of waiting out its backoff. Returns
+    /// <see langword="false"/> when no upstream is registered under <paramref name="key"/>.
+    /// </summary>
+    Task<bool> ReconnectAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>Reconnects every registered upstream in turn (see <see cref="ReconnectAsync"/>).</summary>
+    Task ReconnectAllAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Removes an upstream and rebuilds the catalog without it.</summary>
     Task DisconnectAsync(string key, CancellationToken cancellationToken = default);
 
@@ -217,6 +228,28 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
     }
 
     /// <inheritdoc />
+    public async Task<bool> ReconnectAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (!_upstreams.TryGetValue(key, out var upstream) || upstream.TransportFactory is null)
+            return false;
+
+        // Drop the old session first: a server that restarted will not recognise it anyway, and a refresh
+        // that quietly kept serving the stale connection would defeat the point of asking for one.
+        await DisposeClientAsync(upstream);
+        upstream.RetryDelay = TimeSpan.FromSeconds(10); // an explicit refresh is not a failed retry
+        _logger.LogInformation("Reconnecting upstream {Key} ({Endpoint}) on request.", upstream.Key, upstream.Endpoint);
+        await AttemptAsync(upstream, cancellationToken);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task ReconnectAllAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var key in _upstreams.Keys.ToList())
+            await ReconnectAsync(key, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task DisconnectAsync(string key, CancellationToken cancellationToken = default)
     {
         if (_upstreams.TryRemove(key, out var upstream))
@@ -251,6 +284,7 @@ public sealed class UpstreamRegistry : IUpstreamRegistry
             {
                 var result = await upstream.Client.ListToolsAsync(new ListToolsRequestParams(), cancellationToken);
                 upstream.ToolCount = result.Tools.Count;
+                upstream.Tools = result.Tools.ToList();
 
                 foreach (var tool in result.Tools)
                 {

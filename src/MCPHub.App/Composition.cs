@@ -33,6 +33,8 @@ public static class Composition
         // Asking before something takes effect. A window, so a choice cannot be left half-made by
         // navigating away from the page that asked.
         services.AddSingleton<IConfirmation, DialogConfirmation>();
+        // What refreshing one server on the Proxy page changed about its tools.
+        services.AddSingleton<IToolChangesDialog, ToolChangesDialog>();
 
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ServicesViewModel>();
