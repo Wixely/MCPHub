@@ -11,6 +11,12 @@ internal sealed class ReleaseCacheEntry
 {
     public string ETag { get; set; } = string.Empty;
     public ReleaseInfo? Info { get; set; }
+
+    /// <summary>
+    /// When GitHub last answered for this release, by a 200 or a 304. Absent in cache files written before
+    /// it existed, which read as "never checked" — the safe reading, since it only makes a check run sooner.
+    /// </summary>
+    public DateTimeOffset? CheckedAt { get; set; }
 }
 
 internal sealed class ReleaseCacheFile

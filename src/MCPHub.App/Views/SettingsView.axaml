@@ -76,6 +76,12 @@
       </StackPanel>
 
       <StackPanel Spacing="6">
+        <TextBlock Text="Updates" FontWeight="SemiBold"/>
+        <CheckBox IsChecked="{Binding AutoCheckForHubUpdates}" Content="Look for a newer MCPHub automatically"
+                  ToolTip.Tip="At most once every 48 hours, and only when the last answer from GitHub is older than that. Installing is always your decision."/>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
         <TextBlock Text="Theme" FontWeight="SemiBold"/>
         <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="200" HorizontalAlignment="Left"/>
       </StackPanel>

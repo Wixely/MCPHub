@@ -221,7 +221,7 @@ public sealed class AgentManagementToolProvider : ILocalToolProvider
             sb.Append(" You may install servers that are not installed and apply updates (mcphub__install / mcphub__update).");
         if (updateChecks)
             sb.Append(" You may check GitHub for newer releases (mcphub__check_service_updates for servers, mcphub__check_hub_update ")
-              .Append("for MCPHub itself — MCPHub does not update itself, so report a newer release to the user).");
+              .Append("for MCPHub itself — this tool only reports; the user installs a newer MCPHub from its Updates page).");
         sb.Append(" Server configuration files and logs are not available through these tools; if a server will not start or ")
           .Append("is misconfigured, tell the user, who can see its logs in MCPHub.");
         return sb.ToString();
@@ -325,7 +325,7 @@ public sealed class AgentManagementToolProvider : ILocalToolProvider
             return Error("Couldn't reach GitHub to check for an MCPHub release (or none is published yet). Try again shortly.");
 
         var status = UpdateStatusCalculator.Compute(HubRelease.CurrentVersion, release.Version);
-        var asset = HubRelease.AssetForThisOs(release);
+        var asset = HubRelease.AssetForThisBuild(release);
         var result = new HubUpdateResult
         {
             CurrentVersion = HubRelease.CurrentVersion,
@@ -336,7 +336,7 @@ public sealed class AgentManagementToolProvider : ILocalToolProvider
             AssetName = asset?.Name,
             AssetSizeBytes = asset?.Size,
             Note = status == UpdateStatus.UpdateAvailable
-                ? $"MCPHub {release.Version} is available (running {HubRelease.CurrentVersion}). MCPHub does not update itself: tell the user and give them the release page URL."
+                ? $"MCPHub {release.Version} is available (running {HubRelease.CurrentVersion}). This tool does not update it: tell the user, who can install it from MCPHub's Updates page or the release page URL."
                 : $"MCPHub {HubRelease.CurrentVersion} is the newest release.",
         };
         return Json(result, ManagementJsonContext.Default.HubUpdateResult);

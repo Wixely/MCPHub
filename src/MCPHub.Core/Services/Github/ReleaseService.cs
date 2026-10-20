@@ -24,11 +24,13 @@ public sealed class ReleaseService : IReleaseService
     private readonly ConcurrentDictionary<string, CachedRelease> _cache = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly string _cachePath;
+    private readonly TimeProvider _time;
 
-    public ReleaseService(IHttpClientFactory httpClientFactory, IAppPaths appPaths, ILogger<ReleaseService> logger)
+    public ReleaseService(IHttpClientFactory httpClientFactory, IAppPaths appPaths, ILogger<ReleaseService> logger, TimeProvider? time = null)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _time = time ?? TimeProvider.System;
         _cachePath = Path.Combine(appPaths.DataDirectory, "release-cache.json");
         LoadCache();
     }
@@ -47,7 +49,12 @@ public sealed class ReleaseService : IReleaseService
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (response.StatusCode == HttpStatusCode.NotModified && _cache.TryGetValue(url, out var unchanged))
+            {
+                // Still a check that got an answer: the clock that paces automatic checks moves on.
+                _cache[url] = unchanged with { CheckedAt = _time.GetUtcNow() };
+                await SaveCacheAsync();
                 return unchanged.Info;
+            }
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
@@ -93,7 +100,7 @@ public sealed class ReleaseService : IReleaseService
 
             if (response.Headers.ETag is { } etag)
             {
-                _cache[url] = new CachedRelease(etag, info);
+                _cache[url] = new CachedRelease(etag, info, _time.GetUtcNow());
                 await SaveCacheAsync();
             }
 
@@ -113,6 +120,9 @@ public sealed class ReleaseService : IReleaseService
     public ReleaseInfo? GetCachedRelease(ServiceCatalogEntry entry)
         => _cache.TryGetValue(entry.LatestReleaseApiUrl, out var cached) ? cached.Info : null;
 
+    public DateTimeOffset? GetLastCheckedAt(ServiceCatalogEntry entry)
+        => _cache.TryGetValue(entry.LatestReleaseApiUrl, out var cached) ? cached.CheckedAt : null;
+
     private void LoadCache()
     {
         try
@@ -131,7 +141,7 @@ public sealed class ReleaseService : IReleaseService
                     && EntityTagHeaderValue.TryParse(entry.ETag, out var etag)
                     && etag is not null)
                 {
-                    _cache[url] = new CachedRelease(etag, entry.Info);
+                    _cache[url] = new CachedRelease(etag, entry.Info, entry.CheckedAt);
                 }
             }
         }
@@ -145,7 +155,7 @@ public sealed class ReleaseService : IReleaseService
     {
         var file = new ReleaseCacheFile();
         foreach (var (url, cached) in _cache)
-            file.Entries[url] = new ReleaseCacheEntry { ETag = cached.ETag.ToString(), Info = cached.Info };
+            file.Entries[url] = new ReleaseCacheEntry { ETag = cached.ETag.ToString(), Info = cached.Info, CheckedAt = cached.CheckedAt };
 
         await _saveGate.WaitAsync();
         try
@@ -181,5 +191,5 @@ public sealed class ReleaseService : IReleaseService
         return string.Empty;
     }
 
-    private sealed record CachedRelease(EntityTagHeaderValue ETag, ReleaseInfo Info);
+    private sealed record CachedRelease(EntityTagHeaderValue ETag, ReleaseInfo Info, DateTimeOffset? CheckedAt);
 }

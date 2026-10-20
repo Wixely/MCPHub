@@ -318,7 +318,7 @@ public class AgentManagementToolProviderTests
         Assert.Equal("2026-08-01", Str(json, "publishedAt"));
         Assert.EndsWith("/releases/latest", Str(json, "releasePageUrl"));
         Assert.Contains("MCPHub-", Str(json, "assetName"));
-        Assert.Contains("does not update itself", Str(json, "note"));
+        Assert.Contains("Updates page", Str(json, "note"));
 
         f.Releases.Releases["MCPHub"] = Release("0.0.1");
         var upToDate = Parse(await f.Call("check_hub_update"));

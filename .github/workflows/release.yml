@@ -99,10 +99,15 @@ jobs:
             gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
           fi
 
+      # The app verifies a self-update against this file before swapping anything in, so a download that
+      # was cut short or altered is refused rather than installed.
+      - name: Write the checksums
+        run: cd dist && sha256sum *.zip > SHA256SUMS && cat SHA256SUMS
+
       - name: Upload the release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/*.zip --repo "${GITHUB_REPOSITORY}" --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" dist/*.zip dist/SHA256SUMS --repo "${GITHUB_REPOSITORY}" --clobber
 
   # Publishes the three embeddable libraries (Proxy, Hosting, Processes) to the Wixely
   # GitHub Packages NuGet feed. Consumers restore with a read:packages PAT against

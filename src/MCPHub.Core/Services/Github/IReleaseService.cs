@@ -17,4 +17,10 @@ public interface IReleaseService
     /// or <see langword="null"/> if nothing has been cached yet.
     /// </summary>
     ReleaseInfo? GetCachedRelease(ServiceCatalogEntry entry);
+
+    /// <summary>
+    /// When GitHub last answered a check for this product — a fresh release or a "not modified" alike —
+    /// or <see langword="null"/> when it never has. Failures (offline, rate-limited) do not count as a check.
+    /// </summary>
+    DateTimeOffset? GetLastCheckedAt(ServiceCatalogEntry entry);
 }

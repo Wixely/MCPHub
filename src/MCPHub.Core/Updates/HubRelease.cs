@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.InteropServices;
 using MCPHub.Core.Catalog;
 using MCPHub.Core.Services.Github;
 
@@ -13,12 +12,16 @@ namespace MCPHub.Core.Updates;
 /// auth, rate-limit handling) against <c>Wixely/MCPHub</c>.
 /// </summary>
 /// <remarks>
-/// MCPHub ships as a single-file self-contained executable, one asset per OS
-/// (<c>MCPHub-win-x64-v{ver}.zip</c>) with no flavour token — so the MCPSharp asset-naming default
-/// does not apply and no download path is wired up. Updates are grabbed manually from the release page.
+/// MCPHub ships as a single-file self-contained executable, one asset per runtime identifier
+/// (<c>MCPHub-win-x64-v{ver}.zip</c>, <c>MCPHub-linux-x64-v{ver}.zip</c>) with no flavour token — so the
+/// MCPSharp asset-naming default does not apply. A published build updates itself through
+/// <see cref="HubUpdater"/>; anything else is grabbed from the release page.
 /// </remarks>
 public static class HubRelease
 {
+    /// <summary>The checksum file the release workflow publishes beside the zips.</summary>
+    public const string ChecksumAssetName = "SHA256SUMS";
+
     /// <summary>Reuses the catalog-entry machinery (repo coordinates, release URLs) for MCPHub itself.</summary>
     public static ServiceCatalogEntry Catalog { get; } = new(
         Name: "MCPHub",
@@ -44,19 +47,25 @@ public static class HubRelease
     public static string LatestReleasePageUrl => $"{Catalog.RepositoryUrl}/releases/latest";
 
     /// <summary>
-    /// The release asset for the given OS (<c>MCPHub-win-x64-…</c> / <c>MCPHub-linux-x64-…</c>), so the
-    /// page can name the file to grab. <see langword="null"/> when the release has no asset for it.
-    /// Matched on the OS token rather than the full name, since MCPHub's assets carry no flavour token.
+    /// The release's zip for a runtime identifier (<c>MCPHub-win-x64-…zip</c> for <c>win-x64</c>), or
+    /// <see langword="null"/> when the release has none for it. Matched on the identifier token rather than
+    /// the full name, since MCPHub's assets carry no flavour token; the zip suffix keeps the checksum file
+    /// and any stray asset from matching.
     /// </summary>
-    public static ReleaseAsset? AssetFor(ReleaseInfo release, bool isWindows)
+    public static ReleaseAsset? AssetFor(ReleaseInfo release, string runtimeIdentifier)
     {
-        var token = $"-{ReleaseAssetSelector.OsToken(isWindows)}-x64-";
-        return release.Assets.FirstOrDefault(a => a.Name.Contains(token, StringComparison.OrdinalIgnoreCase));
+        var token = $"-{runtimeIdentifier}-";
+        return release.Assets.FirstOrDefault(a =>
+            a.Name.Contains(token, StringComparison.OrdinalIgnoreCase)
+            && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Convenience overload using the current OS.</summary>
-    public static ReleaseAsset? AssetForThisOs(ReleaseInfo release)
-        => AssetFor(release, RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+    /// <summary>The zip for the running build's runtime identifier.</summary>
+    public static ReleaseAsset? AssetForThisBuild(ReleaseInfo release) => AssetFor(release, HubBuild.Current.RuntimeIdentifier);
+
+    /// <summary>The release's <c>SHA256SUMS</c>, or <see langword="null"/> for a release published without one.</summary>
+    public static ReleaseAsset? ChecksumAssetFor(ReleaseInfo release)
+        => release.Assets.FirstOrDefault(a => string.Equals(a.Name, ChecksumAssetName, StringComparison.OrdinalIgnoreCase));
 
     private static string ResolveCurrentVersion()
     {

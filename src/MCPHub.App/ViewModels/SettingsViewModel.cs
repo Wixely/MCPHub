@@ -66,6 +66,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _proxyBindAddress;
     [ObservableProperty] private bool _startProxyOnLaunch;
     [ObservableProperty] private bool _minimizeToTray;
+    [ObservableProperty] private bool _autoCheckForHubUpdates;
     [ObservableProperty] private bool _closeToTray;
     [ObservableProperty] private string _theme;
     [ObservableProperty] private string _githubPatInput = string.Empty;
@@ -152,6 +153,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _startProxyOnLaunch = s.StartProxyOnLaunch;
         _minimizeToTray = s.MinimizeToTray;
         _closeToTray = s.CloseToTray;
+        _autoCheckForHubUpdates = s.AutoCheckForHubUpdates;
         _theme = s.Theme;
         _hasStoredPat = secretStore.Has(SecretKeys.GithubPat);
     }
@@ -312,6 +314,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.StartProxyOnLaunch = StartProxyOnLaunch;
         s.MinimizeToTray = MinimizeToTray;
         s.CloseToTray = CloseToTray;
+        s.AutoCheckForHubUpdates = AutoCheckForHubUpdates;
         s.Theme = Theme;
         await _settingsStore.SaveAsync();
 
@@ -508,6 +511,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
             StartProxyOnLaunch = s.StartProxyOnLaunch;
             MinimizeToTray = s.MinimizeToTray;
             CloseToTray = s.CloseToTray;
+            AutoCheckForHubUpdates = s.AutoCheckForHubUpdates;
             Theme = s.Theme;
             AgentManagementEnabled = _management.ManagementEnabled;
             AgentControlEnabled = _management.ControlSwitch;

@@ -17,6 +17,12 @@ public static class InstanceRestart
     public const string WaitForExitSwitch = "--restart-after";
 
     /// <summary>
+    /// Command-line switch carrying the version an updater replaced, so the new build can say it took over
+    /// and clean up the file the old one ran from.
+    /// </summary>
+    public const string UpdatedFromSwitch = "--updated-from";
+
+    /// <summary>
     /// How long a replacement waits for its predecessor. Generous, because shutdown stops every managed
     /// server; on expiry it starts anyway and the lock decides, which at worst reports "already running".
     /// </summary>
@@ -40,6 +46,27 @@ public static class InstanceRestart
             return int.TryParse(args[i + 1]?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var pid) && pid > 0
                 ? pid
                 : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The version in <c>--updated-from &lt;version&gt;</c>, or <see langword="null"/> for a launch that is
+    /// not the second half of an update. A missing or switch-shaped value is ignored, as with the pid.
+    /// </summary>
+    public static string? ParseUpdatedFromVersion(IReadOnlyList<string?>? args)
+    {
+        if (args is null)
+            return null;
+
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (!string.Equals(args[i]?.Trim(), UpdatedFromSwitch, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var value = args[i + 1]?.Trim();
+            return string.IsNullOrEmpty(value) || value.StartsWith('-') ? null : value;
         }
 
         return null;
@@ -78,8 +105,11 @@ public static class InstanceRestart
     /// The name the executable is expected to have; defaults to the entry assembly's. See
     /// <see cref="IsLaunchedByAHost"/> for what this is guarding against.
     /// </param>
+    /// <param name="extraArguments">
+    /// Further arguments for the replacement, after the wait switch — an updater passes the version it replaced.
+    /// </param>
     /// <returns><see langword="null"/> on success, or a message explaining why nothing was started.</returns>
-    public static string? TryLaunchReplacement(string? executablePath = null, string? entryAssemblyName = null)
+    public static string? TryLaunchReplacement(string? executablePath = null, string? entryAssemblyName = null, IReadOnlyList<string>? extraArguments = null)
     {
         var path = executablePath ?? Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(path))
@@ -95,6 +125,8 @@ public static class InstanceRestart
             var startInfo = new ProcessStartInfo(path) { UseShellExecute = true };
             startInfo.ArgumentList.Add(WaitForExitSwitch);
             startInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            foreach (var argument in extraArguments ?? [])
+                startInfo.ArgumentList.Add(argument);
             // Carried over explicitly rather than left to the shell: a deployment that is started from its
             // own folder resolves paths against it, and a replacement landing elsewhere would not be a restart.
             startInfo.WorkingDirectory = Environment.CurrentDirectory;

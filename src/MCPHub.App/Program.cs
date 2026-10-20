@@ -1,5 +1,6 @@
 using Avalonia;
 using MCPHub.Core.Infrastructure;
+using MCPHub.Core.Updates;
 
 namespace MCPHub.App;
 
@@ -16,10 +17,21 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // A downloaded build started to install itself over the running one. It does that and exits, before
+        // the single-instance guard and before any UI: it is an installer for a moment, not an instance of
+        // MCPHub, and the instance it is replacing is still shutting down.
+        if (HubUpdateApplier.ParseApplyTarget(args) is not null)
+            return HubUpdateApplier.RunFromCommandLine(args, Path.Combine(new AppPaths().DataDirectory, "update.log"));
+
         // A replacement started by tray Restart waits here for its predecessor to release the lock. Before
         // the guard, because the whole point is to be holding nothing while waiting.
         if (InstanceRestart.ParseWaitForProcessId(args) is { } predecessor)
             InstanceRestart.WaitForProcessExit(predecessor);
+
+        // Started by the updater: either as the new build (it says what it replaced), or as the previous build
+        // put back because the update failed (it says why).
+        App.UpdatedFromVersion = InstanceRestart.ParseUpdatedFromVersion(args);
+        App.UpdateFailure = HubUpdateApplier.ParseUpdateFailure(args);
 
         // Claimed before anything else starts: by the time Avalonia is up, the proxy port and the
         // auto-start services are already being taken, which is exactly what a second instance
@@ -65,6 +77,10 @@ internal static class Program
         using (guard)
         using (activation)
         {
+            // What an update left behind can go now that this process owns MCPHub: the previous build beside the
+            // executable, and the download the updater ran from, which may still be exiting, hence the patience.
+            _ = HubUpdateApplier.CleanupAsync(HubBuild.Current.ExecutablePath, new AppPaths().DownloadsDirectory);
+
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
 

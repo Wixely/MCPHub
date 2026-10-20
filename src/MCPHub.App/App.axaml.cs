@@ -6,6 +6,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Messaging;
+using MCPHub.App.Messages;
 using MCPHub.Hub.Proxy;
 using MCPHub.Core.Infrastructure;
 using MCPHub.App.ViewModels;
@@ -13,6 +15,7 @@ using MCPHub.App.Views;
 using MCPHub.Core.Process;
 using MCPHub.Core.Settings;
 using MCPHub.Core.Routing;
+using MCPHub.Core.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MCPHub.App;
@@ -21,6 +24,12 @@ public partial class App : Application
 {
     /// <summary>Root DI container for the application (composition root).</summary>
     public static IServiceProvider Services { get; private set; } = default!;
+
+    /// <summary>The version this launch replaced, when it is the second half of a self-update; otherwise <see langword="null"/>.</summary>
+    public static string? UpdatedFromVersion { get; set; }
+
+    /// <summary>Why an update was rolled back, when this launch is the previous build put back; otherwise <see langword="null"/>.</summary>
+    public static string? UpdateFailure { get; set; }
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -38,10 +47,26 @@ public partial class App : Application
             // CommunityToolkit.Mvvm uses its own validation; remove Avalonia's duplicate plugin.
             DisableAvaloniaDataAnnotationValidation();
 
-            desktop.MainWindow = new MainWindow
+            var mainViewModel = Services.GetRequiredService<MainWindowViewModel>();
+            desktop.MainWindow = new MainWindow { DataContext = mainViewModel };
+
+            if (UpdatedFromVersion is { } replaced)
+                mainViewModel.ReportUpdated(replaced);
+            if (UpdateFailure is { } failure)
+                mainViewModel.ReportRestartFailure(failure + " Details are in update.log in the MCPHub data folder.");
+
+            // The Updates page, once the new build is in place and waiting: shut down the way Exit does.
+            WeakReferenceMessenger.Default.Register<RestartForUpdateMessage>(this, (_, _) => Dispatcher.UIThread.Post(() =>
             {
-                DataContext = Services.GetRequiredService<MainWindowViewModel>(),
-            };
+                if (desktop.MainWindow is MainWindow window)
+                    window.ForceClose = true;
+                desktop.Shutdown();
+            }));
+
+            // Looks for a newer MCPHub when the last answer is old enough, and says so in a banner.
+            var checker = Services.GetRequiredService<HubUpdateChecker>();
+            checker.UpdateAvailable += release => Dispatcher.UIThread.Post(() => mainViewModel.ReportUpdateAvailable(release.Version));
+            checker.Start();
 
             // Start the aggregated MCP proxy endpoint and begin tracking running services.
             _ = Services.GetRequiredService<ProxyCoordinator>().StartAsync();

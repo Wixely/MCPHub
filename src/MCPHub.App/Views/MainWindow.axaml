@@ -43,6 +43,16 @@
           <Button Grid.Column="1" Content="Dismiss" Command="{Binding DismissRestartFailureCommand}" VerticalAlignment="Center"/>
         </Grid>
       </Border>
+      <!-- A line about MCPHub's own version: updated on this launch, or a newer release waiting -->
+      <Border DockPanel.Dock="Top" IsVisible="{Binding HasUpdateNotice}"
+              Background="#332F81F7" BorderBrush="#662F81F7" BorderThickness="0,0,0,1" Padding="16,10">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+          <TextBlock Text="{Binding UpdateNotice}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="Open Updates" Command="{Binding OpenUpdatesCommand}" VerticalAlignment="Center"
+                  IsVisible="{Binding UpdateNoticeOffersUpdates}"/>
+          <Button Grid.Column="2" Content="Dismiss" Command="{Binding DismissUpdateNoticeCommand}" VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
       <ContentControl Content="{Binding CurrentPage}"/>
     </DockPanel>
 

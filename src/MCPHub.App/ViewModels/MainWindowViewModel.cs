@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using MCPHub.App.Messages;
+using MCPHub.Core.Updates;
 
 namespace MCPHub.App.ViewModels;
 
@@ -25,6 +26,19 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? _restartFailure;
 
     public bool HasRestartFailure => !string.IsNullOrWhiteSpace(RestartFailure);
+
+    /// <summary>
+    /// A line about MCPHub's own version: that this launch is the updated build, or that a newer one is
+    /// waiting on the Updates page. Empty the rest of the time.
+    /// </summary>
+    [ObservableProperty]
+    private string? _updateNotice;
+
+    /// <summary>Whether the notice is an offer, with a button to the Updates page, rather than a confirmation.</summary>
+    [ObservableProperty]
+    private bool _updateNoticeOffersUpdates;
+
+    public bool HasUpdateNotice => !string.IsNullOrWhiteSpace(UpdateNotice);
 
     public ObservableCollection<NavItem> NavItems { get; }
 
@@ -77,6 +91,37 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     partial void OnRestartFailureChanged(string? value) => OnPropertyChanged(nameof(HasRestartFailure));
+
+    partial void OnUpdateNoticeChanged(string? value) => OnPropertyChanged(nameof(HasUpdateNotice));
+
+    /// <summary>This launch is the build an update installed; say so, once, on the window it opens.</summary>
+    public void ReportUpdated(string replacedVersion)
+    {
+        UpdateNoticeOffersUpdates = false;
+        UpdateNotice = string.Equals(replacedVersion, HubRelease.CurrentVersion, StringComparison.OrdinalIgnoreCase)
+            ? $"MCPHub {HubRelease.CurrentVersion} was reinstalled."
+            : $"MCPHub was updated from {replacedVersion} to {HubRelease.CurrentVersion}.";
+    }
+
+    /// <summary>An automatic check found a newer release.</summary>
+    public void ReportUpdateAvailable(string version)
+    {
+        UpdateNoticeOffersUpdates = true;
+        UpdateNotice = $"MCPHub {version} is available (running {HubRelease.CurrentVersion}).";
+    }
+
+    /// <summary>Takes the user from the update notice to the Updates page.</summary>
+    [RelayCommand]
+    private void OpenUpdates()
+    {
+        if (NavItems.FirstOrDefault(n => string.Equals(n.Title, "Updates", StringComparison.Ordinal)) is { } nav)
+            SelectedNav = nav;
+        UpdateNotice = null;
+    }
+
+    /// <summary>Dismisses the update notice.</summary>
+    [RelayCommand]
+    private void DismissUpdateNotice() => UpdateNotice = null;
 
     /// <summary>Surfaces a failed tray Restart on the window the user is being handed back.</summary>
     public void ReportRestartFailure(string message) => RestartFailure = message;

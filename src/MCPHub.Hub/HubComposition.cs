@@ -12,6 +12,7 @@ using MCPHub.Core.Routing;
 using MCPHub.Core.Services;
 using MCPHub.Core.Services.Github;
 using MCPHub.Core.Settings;
+using MCPHub.Core.Updates;
 using MCPHub.Core.Slopworks;
 using MCPHub.Core.Users;
 using MCPHub.Hosting;
@@ -72,6 +73,10 @@ public static class HubComposition
         services.AddSingleton<IReleaseService, ReleaseService>();
         services.AddSingleton<IConfigMergeService, ConfigMergeService>();
         services.AddSingleton<IDownloadService, DownloadService>();
+
+        // The hub updating itself: the swap, and the two-day automatic check behind the Updates page.
+        services.AddSingleton<IHubUpdater, HubUpdater>();
+        services.AddSingleton<HubUpdateChecker>();
         services.AddSingleton<IServiceManager, ServiceManager>();
 
         // Process supervision + log capture

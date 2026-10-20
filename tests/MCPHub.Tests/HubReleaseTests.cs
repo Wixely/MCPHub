@@ -38,20 +38,36 @@ public class HubReleaseTests
     }
 
     [Theory]
-    [InlineData(true, "MCPHub-win-x64-v0.4.3.zip")]
-    [InlineData(false, "MCPHub-linux-x64-v0.4.3.zip")]
-    public void Asset_for_os_matches_the_flavourless_hub_naming(bool isWindows, string expected)
+    [InlineData("win-x64", "MCPHub-win-x64-v0.4.3.zip")]
+    [InlineData("linux-x64", "MCPHub-linux-x64-v0.4.3.zip")]
+    public void Asset_for_a_runtime_matches_the_flavourless_hub_naming(string rid, string expected)
     {
-        var release = Release("0.4.3", "MCPHub-win-x64-v0.4.3.zip", "MCPHub-linux-x64-v0.4.3.zip");
+        var release = Release("0.4.3", "MCPHub-win-x64-v0.4.3.zip", "MCPHub-linux-x64-v0.4.3.zip", "SHA256SUMS");
 
-        Assert.Equal(expected, HubRelease.AssetFor(release, isWindows)?.Name);
+        Assert.Equal(expected, HubRelease.AssetFor(release, rid)?.Name);
+    }
+
+    [Theory]
+    [InlineData("win-x64")]
+    [InlineData("win-arm64")]
+    [InlineData("osx-arm64")]
+    public void Asset_is_null_when_the_release_has_none_for_that_runtime(string rid)
+    {
+        // Including the arm64 cases: an arm64 machine must get "nothing to install", never the x64 file.
+        var release = Release("0.4.3", "MCPHub-linux-x64-v0.4.3.zip", "SHA256SUMS");
+
+        Assert.Null(HubRelease.AssetFor(release, rid));
     }
 
     [Fact]
-    public void Asset_for_os_is_null_when_the_release_has_none_for_it()
+    public void Checksum_file_is_found_by_name_and_only_by_name()
     {
-        var release = Release("0.4.3", "MCPHub-linux-x64-v0.4.3.zip");
+        var with = Release("0.4.3", "MCPHub-win-x64-v0.4.3.zip", "sha256sums");
+        var without = Release("0.4.3", "MCPHub-win-x64-v0.4.3.zip");
 
-        Assert.Null(HubRelease.AssetFor(release, isWindows: true));
+        Assert.Equal("sha256sums", HubRelease.ChecksumAssetFor(with)?.Name);
+        Assert.Null(HubRelease.ChecksumAssetFor(without));
+        // The checksum file is never mistaken for a build, whatever runtime is asked for.
+        Assert.Null(HubRelease.AssetFor(Release("0.4.3", "SHA256SUMS"), "win-x64"));
     }
 }

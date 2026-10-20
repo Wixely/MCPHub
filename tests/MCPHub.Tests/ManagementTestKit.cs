@@ -166,9 +166,19 @@ internal static class ManagementTestKit
         public Exception? Throws { get; set; }
 
         public Task<ReleaseInfo?> GetLatestReleaseAsync(ServiceCatalogEntry entry, CancellationToken cancellationToken = default)
-            => Throws is { } ex ? Task.FromException<ReleaseInfo?>(ex) : Task.FromResult(Releases.GetValueOrDefault(entry.Name));
+        {
+            Calls++;
+            return Throws is { } ex ? Task.FromException<ReleaseInfo?>(ex) : Task.FromResult(Releases.GetValueOrDefault(entry.Name));
+        }
 
         public ReleaseInfo? GetCachedRelease(ServiceCatalogEntry entry) => null;
+
+        public Dictionary<string, DateTimeOffset?> LastChecked { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public DateTimeOffset? GetLastCheckedAt(ServiceCatalogEntry entry) => LastChecked.GetValueOrDefault(entry.Name);
+
+        /// <summary>How many times <see cref="GetLatestReleaseAsync"/> was called, across all products.</summary>
+        public int Calls { get; private set; }
     }
 
     public static ReleaseInfo Release(string version, params string[] assetNames) => new(

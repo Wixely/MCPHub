@@ -387,15 +387,17 @@ The lock is an exclusive lock the operating system holds on `mcphub.lock` for as
 
 **Two servers fighting over a port.** Each server's port lives in its own JSON under `Server` → `Port`. Change one, then stop and start it.
 
+**Updating MCPHub itself.** The Updates page compares the running build with the newest release, automatically at most once every 48 hours (switch it off in Settings). On a published build, **Install … and restart** downloads the zip for your platform, checks its size and SHA-256 against the release's checksum file, and closes. The downloaded build then waits for the old one to exit, copies itself over the executable (keeping the previous one as `MCPHub.exe.old`, or `MCPHub.old` on Linux) and starts it; the new build removes the `.old` file and the download. A running build is never replaced in place, because a single-file .NET app keeps reading its own file while it runs. If installing or starting the new build fails, the previous build is put back and started with a banner saying why, and the steps are logged to `update.log` in the MCPHub data folder. A build run from `dotnet run` or a bin folder cannot replace itself; use the release page.
+
 **"Couldn't reach GitHub."** Update checks are rate-limited to 60 an hour without a token. Add a GitHub token in **Settings** to lift it — read-only public access is enough.
 
 **My client can't see any tools.** Check the **Proxy** page shows the proxy running and at least one server *Connected*. A server has to be **Running** on the Services page before the proxy will pick it up.
 
 **Nothing is listed as Connected.** Servers connect a moment after they start. If a server sits at *Starting* it's failing its health check — check its logs.
 
-**A server I added keeps faulting with 401 or "unauthorized".** Its row on the Proxy page names how it authenticates. *"No token"* means nothing is being sent — use **Set token**. *"BearerToken configured — token missing"* means the mechanism is set but the secret store has no value for it, which also shows as a warning in the logs; set the token again. If the server wants an API-key header rather than a bearer token, name that header in the box to the left of the token.
-
 **A server I added was updated and its new tools aren't showing.** Tools are listed once, when the server connects. Press **Refresh** on its row on the Proxy page (or **Refresh all**) to reconnect and re-list it; the same button retries a *Faulted* server at once instead of waiting for its backoff.
+
+**A server I added keeps faulting with 401 or "unauthorized".** Its row on the Proxy page names how it authenticates. *"No token"* means nothing is being sent — use **Set token**. *"BearerToken configured — token missing"* means the mechanism is set but the secret store has no value for it, which also shows as a warning in the logs; set the token again. If the server wants an API-key header rather than a bearer token, name that header in the box to the left of the token.
 
 ## Licence
 

@@ -160,6 +160,12 @@ public sealed class MCPHubSettings
 
     public bool MinimizeToTray { get; set; } = true;
 
+    /// <summary>
+    /// Whether MCPHub looks for a newer release of itself unasked — at most once every two days, only when
+    /// the last answer from GitHub is older than that. Off means checks happen only from the Updates page.
+    /// </summary>
+    public bool AutoCheckForHubUpdates { get; set; } = true;
+
     public bool CloseToTray { get; set; } = true;
 
     /// <summary>UI theme: <c>Default</c>, <c>Light</c>, or <c>Dark</c>.</summary>
